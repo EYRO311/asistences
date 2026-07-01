@@ -1,0 +1,17 @@
+# Next.js
+web/.next/
+web/node_modules/
+web/.env.local
+
+# Django
+calendar-service/.venv/
+calendar-service/__pycache__/
+calendar-service/**/__pycache__/
+calendar-service/*.pyc
+calendar-service/db.sqlite3
+calendar-service/staticfiles/
+calendar-service/.env
+
+# OS
+.DS_Store
+Thumbs.db
