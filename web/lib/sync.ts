@@ -126,7 +126,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
           all_day: event.allDay,
           add_to_calendar: true,
           status: "syncing",
-          google_event_id: event.id,
+          google_event_id: event.recurringEventId ?? event.id,
           source: "google_sync",
         })
         .select("*")
