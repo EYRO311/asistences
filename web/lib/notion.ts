@@ -107,6 +107,7 @@ type TaskItemFields = Pick<
   | "effort"
   | "task_status"
   | "categories"
+  | "location"
   | "recurrence_days"
   | "recurrence_start_time"
   | "recurrence_end_time"
@@ -140,6 +141,12 @@ function buildTaskProperties(
     result["fecha evento"] = item.start_time
       ? { date: { start: item.start_time, end: item.end_time ?? null } }
       : { date: null };
+  }
+
+  if (properties["Ubicación"] && item.location !== undefined) {
+    result["Ubicación"] = {
+      rich_text: item.location ? [{ type: "text", text: { content: item.location } }] : [],
+    };
   }
 
   if (properties["Fecha límite"] && item.due_date !== undefined) {
