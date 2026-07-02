@@ -84,6 +84,8 @@ export interface Profile {
   preferred_transport: PreferredTransport | null;
   extra_buffer_minutes: number;
   theme: "light" | "dark" | null;
+  wake_time: string;
+  sleep_time: string;
   created_at: string;
 }
 

@@ -10,6 +10,8 @@ const updateProfileSchema = z.object({
   preferred_transport: z.enum(["car", "bike", "public_transport", "walking"]).nullable().optional(),
   extra_buffer_minutes: z.number().int().min(0).max(120).optional(),
   theme: z.enum(["light", "dark"]).nullable().optional(),
+  wake_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  sleep_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
 });
 
 export async function GET() {

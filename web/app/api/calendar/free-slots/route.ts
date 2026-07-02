@@ -10,15 +10,13 @@ const querySchema = z.object({
   time_max: z.string().datetime(),
 });
 
-const WORKING_HOURS_BY_WEEKDAY: Record<string, { start: string; end: string }> = {
-  "1": { start: "06:00", end: "23:59" },
-  "2": { start: "06:00", end: "23:59" },
-  "3": { start: "06:00", end: "23:59" },
-  "4": { start: "06:00", end: "23:59" },
-  "5": { start: "06:00", end: "23:59" },
-  "6": { start: "07:00", end: "23:59" },
-  "7": { start: "07:00", end: "23:59" },
-};
+function buildWorkingHours(
+  wakeTime: string,
+  sleepTime: string
+): Record<string, { start: string; end: string }> {
+  const hours = { start: wakeTime, end: sleepTime };
+  return { "1": hours, "2": hours, "3": hours, "4": hours, "5": hours, "6": hours, "7": hours };
+}
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -46,11 +44,13 @@ export async function GET(request: NextRequest) {
 
     const { data: profile } = await service
       .from("profiles")
-      .select("timezone")
+      .select("timezone, wake_time, sleep_time")
       .eq("id", user.id)
-      .single<Pick<Profile, "timezone">>();
+      .single<Pick<Profile, "timezone" | "wake_time" | "sleep_time">>();
 
     const tz = profile?.timezone ?? "America/Mexico_City";
+    const wakeTime = profile?.wake_time ?? "06:00";
+    const sleepTime = profile?.sleep_time ?? "23:00";
     const timeMin = new Date(parsed.data.time_min);
     const timeMax = new Date(parsed.data.time_max);
 
@@ -112,7 +112,8 @@ export async function GET(request: NextRequest) {
 
     const allBusy = [...googleBusy, ...extraBusy];
 
-    const days = computeFreeSlots(allBusy, timeMin, timeMax, tz, WORKING_HOURS_BY_WEEKDAY);
+    const workingHours = buildWorkingHours(wakeTime, sleepTime);
+    const days = computeFreeSlots(allBusy, timeMin, timeMax, tz, workingHours);
 
     return NextResponse.json({ days });
   } catch (err) {

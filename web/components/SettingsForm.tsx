@@ -188,6 +188,8 @@ export function SettingsForm({
     profile.preferred_transport ?? null
   );
   const [extraBuffer, setExtraBuffer] = useState(profile.extra_buffer_minutes ?? 0);
+  const [wakeTime, setWakeTime] = useState(profile.wake_time ?? "06:00");
+  const [sleepTime, setSleepTime] = useState(profile.sleep_time ?? "23:00");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -212,6 +214,8 @@ export function SettingsForm({
           location,
           preferred_transport: preferredTransport,
           extra_buffer_minutes: extraBuffer,
+          wake_time: wakeTime,
+          sleep_time: sleepTime,
         }),
       });
 
@@ -331,6 +335,40 @@ export function SettingsForm({
               onChange={(e) => setTimezone(e.target.value)}
               className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
             />
+          </div>
+
+          {/* ── Horario de descanso ── */}
+          <div className="space-y-3 rounded-md border border-border-soft p-4">
+            <p className="text-sm font-medium">Horario de descanso</p>
+            <p className="text-xs text-muted">
+              Los días libres solo se muestran dentro de tu horario activo. Ajusta según cuándo duermes.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-muted mb-1.5 block" htmlFor="wake_time">
+                  Me despierto a las
+                </label>
+                <input
+                  id="wake_time"
+                  type="time"
+                  value={wakeTime}
+                  onChange={(e) => setWakeTime(e.target.value)}
+                  className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted mb-1.5 block" htmlFor="sleep_time">
+                  Me duermo a las
+                </label>
+                <input
+                  id="sleep_time"
+                  type="time"
+                  value={sleepTime}
+                  onChange={(e) => setSleepTime(e.target.value)}
+                  className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
           </div>
 
           {/* ── Preferencias de viaje ── */}
