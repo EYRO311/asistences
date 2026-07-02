@@ -74,10 +74,14 @@ export interface Item {
 
 export type PreferredTransport = "car" | "bike" | "public_transport" | "walking";
 
+export type Gender = "masculino" | "femenino" | "no_binario" | "prefiero_no_decir";
+
 export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
+  age: number | null;
+  gender: Gender | null;
   timezone: string;
   notion_database_id: string | null;
   location: string | null;

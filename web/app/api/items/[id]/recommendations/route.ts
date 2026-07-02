@@ -51,9 +51,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("location, preferred_transport, extra_buffer_minutes")
+    .select("location, preferred_transport, extra_buffer_minutes, full_name, age, gender")
     .eq("id", user.id)
-    .single<Pick<Profile, "location" | "preferred_transport" | "extra_buffer_minutes">>();
+    .single<Pick<Profile, "location" | "preferred_transport" | "extra_buffer_minutes" | "full_name" | "age" | "gender">>();
 
   const originText = profile?.location || null;
   const destinationText = item.location || originText;
@@ -105,6 +105,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     weather,
     travel,
     preferredTransport: effectiveTransport,
+    userProfile: profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null,
   });
 
   const result: CachedRecommendation = {

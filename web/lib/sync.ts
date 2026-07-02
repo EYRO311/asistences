@@ -23,9 +23,18 @@ export interface SyncResult {
   errors: string[];
 }
 
+/** Normaliza cualquier ISO datetime a UTC para comparaciones sin importar el offset. */
+function normalizeISO(ts: string): string {
+  try {
+    return new Date(ts).toISOString();
+  } catch {
+    return ts;
+  }
+}
+
 function duplicateKey(title: string, startTime: string | null): string | null {
   if (!startTime) return null;
-  return `${title.trim().toLowerCase()}|${startTime}`;
+  return `${title.trim().toLowerCase()}|${normalizeISO(startTime)}`;
 }
 
 /** Extrae "HH:mm" de un ISO datetime como "2026-07-01T09:00:00-06:00". */
@@ -101,6 +110,16 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     }
   }
 
+  // Fallback: cualquier ítem con recurrence_days no vacío — se usa cuando la
+  // rutina no tiene recurrence_start_time y no podemos comparar por hora exacta.
+  const routineByTitle = new Map<string, Item>();
+  for (const item of existingItems) {
+    if (item.recurrence_days?.length) {
+      const key = item.title.trim().toLowerCase();
+      if (!routineByTitle.has(key)) routineByTitle.set(key, item);
+    }
+  }
+
   let importedFromGoogle = 0;
   let importedFromNotion = 0;
 
@@ -140,7 +159,8 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
 
             const matchingItem =
               routineByTitleAndTime.get(titleTimeKey) ??
-              googleSyncByTitleAndTime.get(titleTimeKey);
+              googleSyncByTitleAndTime.get(titleTimeKey) ??
+              routineByTitle.get(event.title.trim().toLowerCase());
 
             if (matchingItem) {
               importedRecurringIds.add(masterGoogleId);
@@ -201,6 +221,8 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
             .from("items")
             .update({ notion_page_id: pageId, notion_url: url, status: "confirmed" })
             .eq("id", item.id);
+          // Registrar el pageId para que la fase Notion→App no lo reimporte.
+          knownNotionIds.add(pageId);
         } else {
           await supabase.from("items").update({ status: "confirmed" }).eq("id", item.id);
         }
@@ -225,7 +247,9 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
       for (const page of pages) {
         if (knownNotionIds.has(page.pageId)) continue;
 
-        const existingMatch = byDuplicateKey.get(duplicateKey(page.title, page.startTime) ?? "");
+        const existingMatch =
+          byDuplicateKey.get(duplicateKey(page.title, page.startTime) ?? "") ??
+          routineByTitle.get(page.title.trim().toLowerCase());
         if (existingMatch) {
           const patch: Record<string, unknown> = {};
           if (!existingMatch.notion_page_id) {
@@ -286,6 +310,8 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
             .from("items")
             .update({ google_event_id: googleEventId, status: "confirmed" })
             .eq("id", item.id);
+          // Registrar el eventId para que futuras sincronizaciones no lo reimporte.
+          knownGoogleIds.add(googleEventId);
         } catch (err) {
           errors.push(`Google Calendar (espejo de "${page.title}"): ${err instanceof Error ? err.message : "error"}`);
           await supabase.from("items").update({ status: "failed" }).eq("id", item.id);
@@ -326,9 +352,14 @@ async function mergeDuplicateItems(userId: string): Promise<number> {
 
   const groups = new Map<string, Item[]>();
   for (const item of items) {
-    // Las rutinas se agrupan por título + días, no por start_time exacto
-    // (ver routineDuplicateKey); el resto sigue agrupándose por título + hora.
-    const key = routineDuplicateKey(item) ?? duplicateKey(item.title, item.start_time);
+    // Prioridad 1: rutinas de la app (recurrence_days no vacío) → mismo título + días.
+    // Prioridad 2: mismo google_event_id → misma serie recurrente importada de Google
+    //   (distintas ocurrencias del mismo RRULE quedaron como ítems separados antes del fix).
+    // Prioridad 3: mismo título + fecha/hora exacta (normalizada a UTC).
+    const key =
+      routineDuplicateKey(item) ??
+      (item.google_event_id ? `gid|${item.google_event_id}` : null) ??
+      duplicateKey(item.title, item.start_time);
     if (!key) continue;
     const list = groups.get(key) ?? [];
     list.push(item);

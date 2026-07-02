@@ -110,9 +110,9 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
     // --- Paso 3: crear página en Notion ---
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("notion_database_id, location")
+      .select("notion_database_id, location, full_name, age, gender")
       .eq("id", userId)
-      .single<Pick<Profile, "notion_database_id" | "location">>();
+      .single<Pick<Profile, "notion_database_id" | "location" | "full_name" | "age" | "gender">>();
 
     if (profileError || !profile?.notion_database_id) {
       throw new SagaError(
@@ -120,6 +120,8 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
         "El usuario no tiene configurada una base de datos de Notion (profiles.notion_database_id)"
       );
     }
+
+    const userProfile = { name: profile.full_name, age: profile.age, gender: profile.gender };
 
     // Obtener clima y ubicación para la sugerencia de vestimenta.
     const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
@@ -129,7 +131,7 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
 
     // Sugerencia con clima: se usa tanto en la app como en Notion.
     const outfitSuggestion = await suggestOutfitForNotion(
-      item.title, item.description, resolvedLocation, weather
+      item.title, item.description, resolvedLocation, weather, userProfile
     ).catch(() => null);
 
     const notionToken = await getNotionAccessToken(userId);

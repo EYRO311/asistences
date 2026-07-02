@@ -1,6 +1,25 @@
 import { GoogleGenAI } from "@google/genai";
+import type { Gender } from "@/lib/types";
 
 const DEFAULT_MODEL = "gemini-3.5-flash";
+
+export interface UserProfile {
+  name?: string | null;
+  age?: number | null;
+  gender?: Gender | null;
+}
+
+function userProfileLine(profile?: UserProfile | null): string | null {
+  if (!profile) return null;
+  const parts: string[] = [];
+  if (profile.name) parts.push(profile.name);
+  if (profile.age) parts.push(`${profile.age} años`);
+  if (profile.gender && profile.gender !== "prefiero_no_decir") {
+    const label = { masculino: "masculino", femenino: "femenino", no_binario: "no binario / otro" }[profile.gender];
+    if (label) parts.push(`género: ${label}`);
+  }
+  return parts.length ? `Usuario: ${parts.join(", ")}.` : null;
+}
 
 /**
  * Sugiere brevemente qué tipo de vestimenta es apropiada para una tarea,
@@ -49,7 +68,8 @@ export async function suggestOutfitForNotion(
   title: string,
   description: string | null | undefined,
   locationName: string | null,
-  weather: WeatherSummary | null
+  weather: WeatherSummary | null,
+  userProfile?: UserProfile | null
 ): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -59,7 +79,9 @@ export async function suggestOutfitForNotion(
   const prompt = [
     "Sugiere en máximo 15 palabras qué tipo de vestimenta usar para esta tarea/evento,",
     "tomando en cuenta el clima y la ubicación si los tengo disponibles (ej. si va a llover o hace frío, dilo).",
+    "Adapta la sugerencia al perfil del usuario si está disponible.",
     "Responde solo con la sugerencia, sin explicaciones ni comillas.",
+    userProfileLine(userProfile),
     `Título: ${title}`,
     description ? `Descripción: ${description}` : null,
     locationName ? `Ubicación: ${locationName}` : null,
@@ -100,6 +122,7 @@ export interface RecommendationContext {
     publicTransport: { minutes: number; leaveMinutesBefore: number };
   } | null;
   preferredTransport?: "car" | "bike" | "public_transport" | "walking" | null;
+  userProfile?: UserProfile | null;
 }
 
 /**
@@ -121,7 +144,9 @@ export async function getRecommendations(context: RecommendationContext): Promis
     "lluvia, calor extremo), acláralo explícitamente. Si hay datos de traslado, di con cuánta",
     "anticipación salir según el medio de transporte (los minutos de 'leaveMinutesBefore' ya incluyen",
     "margen de espera/imprevistos, úsalos directo, no los recalcules).",
+    "Adapta las sugerencias de vestimenta al perfil del usuario si está disponible.",
     "Responde directo con las recomendaciones, sin encabezados ni comillas.",
+    userProfileLine(context.userProfile),
     `Título: ${context.title}`,
     context.description ? `Descripción: ${context.description}` : null,
     context.locationName ? `Ubicación del evento: ${context.locationName}` : null,

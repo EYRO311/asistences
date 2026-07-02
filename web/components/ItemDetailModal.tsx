@@ -95,24 +95,57 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
     }
   }
 
+  function handleTransportClick(value: PreferredTransport) {
+    const next = value === selectedTransport ? null : value;
+    setSelectedTransport(next);
+    if (data) load(true, next);
+  }
+
+  const transportSelector = (
+    <div className="flex flex-wrap gap-1.5">
+      {TRANSPORT_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          disabled={loading}
+          onClick={() => handleTransportClick(opt.value)}
+          className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors disabled:opacity-50 ${
+            selectedTransport === opt.value
+              ? "border-foreground bg-foreground text-background"
+              : "border-border-soft hover:bg-surface"
+          }`}
+        >
+          <span aria-hidden>{opt.icon}</span>
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+
   if (!data && !loading) {
     return (
-      <button
-        type="button"
-        onClick={() => load()}
-        className="w-full rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface"
-      >
-        ✨ Cargar recomendaciones
-      </button>
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-muted uppercase tracking-wide">Transporte</p>
+        {transportSelector}
+        <button
+          type="button"
+          onClick={() => load(false, selectedTransport)}
+          className="w-full rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface"
+        >
+          ✨ Cargar recomendaciones
+        </button>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+      </div>
     );
   }
 
   if (loading) {
-    return <p className="text-sm text-muted">Consultando clima, rutas y generando recomendaciones…</p>;
-  }
-
-  if (error) {
-    return <p className="text-sm text-red-500">{error}</p>;
+    return (
+      <div className="space-y-2">
+        {transportSelector}
+        <p className="text-sm text-muted">Consultando clima, rutas y generando recomendaciones…</p>
+      </div>
+    );
   }
 
   if (!data) return null;
@@ -132,24 +165,7 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
         </button>
       </div>
 
-      {/* Selector de modo de transporte — siempre visible para regenerar la recomendación */}
-      <div className="flex flex-wrap gap-1.5">
-        {TRANSPORT_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setSelectedTransport(opt.value === selectedTransport ? null : opt.value)}
-            className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-              selectedTransport === opt.value
-                ? "border-foreground bg-foreground text-background"
-                : "border-border-soft hover:bg-surface"
-            }`}
-          >
-            <span aria-hidden>{opt.icon}</span>
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      {transportSelector}
 
       {data.location && (
         <p className="text-sm text-muted">
@@ -172,6 +188,8 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
           {data.recommendation ?? data.outfit_suggestion}
         </div>
       )}
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
     </div>
   );
 }

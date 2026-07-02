@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Integration, PreferredTransport, Profile } from "@/lib/types";
+import type { Gender, Integration, PreferredTransport, Profile } from "@/lib/types";
 import { LocationField } from "@/components/LocationField";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -181,6 +181,9 @@ export function SettingsForm({
 }) {
   const router = useRouter();
 
+  const [fullName, setFullName] = useState(profile.full_name ?? "");
+  const [age, setAge] = useState<string>(profile.age != null ? String(profile.age) : "");
+  const [gender, setGender] = useState<Gender | null>(profile.gender ?? null);
   const [notionDatabaseId, setNotionDatabaseId] = useState(profile.notion_database_id ?? "");
   const [timezone, setTimezone] = useState(profile.timezone);
   const [location, setLocation] = useState(profile.location ?? "");
@@ -194,6 +197,8 @@ export function SettingsForm({
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showNotionHelp, setShowNotionHelp] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"perfil" | "horarios" | "conexiones">("perfil");
 
   const googleConnected = integrations.some((i) => i.provider === "google");
   const notionIntegration = integrations.find((i) => i.provider === "notion");
@@ -209,6 +214,9 @@ export function SettingsForm({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          full_name: fullName || undefined,
+          age: age ? Number(age) : null,
+          gender: gender ?? null,
           notion_database_id: notionDatabaseId,
           timezone,
           location,
@@ -231,100 +239,117 @@ export function SettingsForm({
     }
   }
 
+  const TABS = [
+    { id: "perfil", label: "Perfil" },
+    { id: "horarios", label: "Horarios" },
+    { id: "conexiones", label: "Conexiones" },
+  ] as const;
+
   return (
     <>
     {showNotionHelp && <NotionHelpModal onClose={() => setShowNotionHelp(false)} />}
-    <div className="space-y-8">
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Conexiones</h2>
 
-        <div className="flex items-center justify-between rounded-md border border-border-soft px-4 py-3">
+    {/* ── Menú de tabs ── */}
+    <div className="flex gap-1 rounded-lg border border-border-soft bg-surface p-1 mb-6">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => setActiveTab(tab.id)}
+          className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
+            activeTab === tab.id
+              ? "bg-foreground text-background"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+
+    <form onSubmit={handleSubmit} className="space-y-4">
+
+      {/* ══ TAB: PERFIL ══ */}
+      {activeTab === "perfil" && (
+        <>
           <div>
-            <p className="font-medium">Google Calendar</p>
-            <p className="text-sm text-muted">
-              {googleConnected ? "Conectado" : "Necesario para crear eventos y calcular días libres"}
-            </p>
+            <label className="block text-sm font-medium mb-1" htmlFor="full_name">
+              Nombre
+            </label>
+            <input
+              id="full_name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Ej. Ana García"
+              className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
+            />
           </div>
-          <a
-            href="/api/auth/google/connect"
-            className="rounded-md border border-border-soft px-3 py-1.5 text-sm"
-          >
-            {googleConnected ? "Reconectar" : "Conectar"}
-          </a>
-        </div>
 
-        <div className="flex items-center justify-between rounded-md border border-border-soft px-4 py-3">
-          <div>
-            <p className="font-medium">Notion</p>
-            <p className="text-sm text-muted">
-              {notionIntegration
-                ? `Conectado a ${(notionIntegration.metadata as { workspace_name?: string })?.workspace_name ?? "workspace"}`
-                : "Necesario para crear una página por cada tarea"}
-            </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1" htmlFor="age">
+                Edad
+              </label>
+              <input
+                id="age"
+                type="number"
+                min={0}
+                max={120}
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="Ej. 25"
+                className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <p className="text-sm font-medium mb-1">Género</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { value: "femenino", label: "Femenino" },
+                    { value: "masculino", label: "Masculino" },
+                    { value: "no_binario", label: "No binario" },
+                    { value: "prefiero_no_decir", label: "Prefiero no decir" },
+                  ] as { value: Gender; label: string }[]
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setGender(gender === opt.value ? null : opt.value)}
+                    className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                      gender === opt.value
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border-soft hover:bg-surface"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <a
-            href="/api/auth/notion/connect"
-            className="rounded-md border border-border-soft px-3 py-1.5 text-sm"
-          >
-            {notionIntegration ? "Reconectar" : "Conectar"}
-          </a>
-        </div>
-      </section>
 
-      <section>
-        <h2 className="text-lg font-medium mb-3">Preferencias</h2>
-
-        {!location && (
-          <p className="mb-4 rounded-md border border-border-soft bg-surface px-3 py-2 text-xs text-muted">
-            <span aria-hidden>📍 </span>
-            Agrega tu ubicación (casa, trabajo, donde sea que estés normalmente) para que las recomendaciones de
-            vestimenta puedan tomar en cuenta el clima real.
-          </p>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1" htmlFor="location">
-              ¿Dónde vives o trabajas?
+              Ubicación habitual
             </label>
             <LocationField
               id="location"
               value={location}
               onChange={setLocation}
-              placeholder="Ej. Casa, Insurgentes Sur 123, Ciudad de México"
+              placeholder="Ej. Insurgentes Sur 123, Ciudad de México"
             />
             <p className="mt-1 text-xs text-muted">
               Se usa para calcular el clima en "Recomendaciones" cuando una tarea no tiene su propia ubicación.
-              Puedes poner tu casa, tu trabajo, o donde pases más tiempo.
             </p>
           </div>
+        </>
+      )}
 
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <label className="text-sm font-medium" htmlFor="notion_database_id">
-                ID de la base de datos de Notion
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowNotionHelp(true)}
-                className="w-5 h-5 rounded-full border border-border-soft text-xs text-muted hover:text-foreground hover:border-foreground flex items-center justify-center"
-              >
-                ?
-              </button>
-            </div>
-            <input
-              id="notion_database_id"
-              value={notionDatabaseId}
-              onChange={(e) => setNotionDatabaseId(e.target.value)}
-              placeholder="32 caracteres del final de la URL de la base de datos"
-              className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-muted">
-              Cada nueva tarea creará una página dentro de esta base de datos. Comparte esa base de datos con la
-              integración de Notion conectada arriba.
-            </p>
-          </div>
-
+      {/* ══ TAB: HORARIOS ══ */}
+      {activeTab === "horarios" && (
+        <>
           <div>
             <label className="block text-sm font-medium mb-1" htmlFor="timezone">
               Zona horaria
@@ -337,11 +362,10 @@ export function SettingsForm({
             />
           </div>
 
-          {/* ── Horario de descanso ── */}
           <div className="space-y-3 rounded-md border border-border-soft p-4">
             <p className="text-sm font-medium">Horario de descanso</p>
             <p className="text-xs text-muted">
-              Los días libres solo se muestran dentro de tu horario activo. Ajusta según cuándo duermes.
+              Los días libres solo se muestran dentro de tu horario activo.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -371,14 +395,8 @@ export function SettingsForm({
             </div>
           </div>
 
-          {/* ── Preferencias de viaje ── */}
           <div className="space-y-3 rounded-md border border-border-soft p-4">
             <p className="text-sm font-medium">Preferencias de viaje</p>
-            <p className="text-xs text-muted">
-              Se usan para resaltar el medio de transporte que prefieres en las recomendaciones y calcular mejor el
-              tiempo de salida.
-            </p>
-
             <div>
               <p className="text-xs text-muted mb-2">Medio de transporte habitual</p>
               <div className="flex flex-wrap gap-2">
@@ -404,7 +422,7 @@ export function SettingsForm({
 
             <div>
               <label className="text-xs text-muted mb-2 block" htmlFor="extra_buffer">
-                Tiempo extra de margen al salir (minutos adicionales)
+                Tiempo extra al salir
               </label>
               <div className="flex items-center gap-3">
                 <input
@@ -417,33 +435,92 @@ export function SettingsForm({
                   onChange={(e) => setExtraBuffer(Number(e.target.value))}
                   className="flex-1"
                 />
-                <span className="w-12 text-center text-sm font-medium">
+                <span className="w-16 text-center text-sm font-medium">
                   {extraBuffer === 0 ? "Sin extra" : `+${extraBuffer} min`}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-muted">
-                Se suma al tiempo de salida sugerido para que siempre llegues con margen.
-              </p>
             </div>
           </div>
+        </>
+      )}
 
-          {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
-          {saved && (
-            <p className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
-              <span aria-hidden>✓</span> Guardado correctamente
+      {/* ══ TAB: CONEXIONES ══ */}
+      {activeTab === "conexiones" && (
+        <>
+          <div className="flex items-center justify-between rounded-md border border-border-soft px-4 py-3">
+            <div>
+              <p className="font-medium">Google Calendar</p>
+              <p className="text-sm text-muted">
+                {googleConnected ? "Conectado" : "Necesario para crear eventos y calcular días libres"}
+              </p>
+            </div>
+            <a
+              href="/api/auth/google/connect"
+              className="rounded-md border border-border-soft px-3 py-1.5 text-sm hover:bg-surface"
+            >
+              {googleConnected ? "Reconectar" : "Conectar"}
+            </a>
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-border-soft px-4 py-3">
+            <div>
+              <p className="font-medium">Notion</p>
+              <p className="text-sm text-muted">
+                {notionIntegration
+                  ? `Conectado a ${(notionIntegration.metadata as { workspace_name?: string })?.workspace_name ?? "workspace"}`
+                  : "Necesario para crear una página por cada tarea"}
+              </p>
+            </div>
+            <a
+              href="/api/auth/notion/connect"
+              className="rounded-md border border-border-soft px-3 py-1.5 text-sm hover:bg-surface"
+            >
+              {notionIntegration ? "Reconectar" : "Conectar"}
+            </a>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <label className="text-sm font-medium" htmlFor="notion_database_id">
+                ID de la base de datos de Notion
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowNotionHelp(true)}
+                className="w-5 h-5 rounded-full border border-border-soft text-xs text-muted hover:text-foreground hover:border-foreground flex items-center justify-center"
+              >
+                ?
+              </button>
+            </div>
+            <input
+              id="notion_database_id"
+              value={notionDatabaseId}
+              onChange={(e) => setNotionDatabaseId(e.target.value)}
+              placeholder="32 caracteres del final de la URL de la base de datos"
+              className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Cada nueva tarea creará una página dentro de esta base de datos.
             </p>
-          )}
+          </div>
+        </>
+      )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {loading ? "Guardando..." : "Guardar"}
-          </button>
-        </form>
-      </section>
-    </div>
+      {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
+      {saved && (
+        <p className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+          <span aria-hidden>✓</span> Guardado correctamente
+        </p>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium disabled:opacity-50"
+      >
+        {loading ? "Guardando..." : "Guardar"}
+      </button>
+    </form>
     </>
   );
 }

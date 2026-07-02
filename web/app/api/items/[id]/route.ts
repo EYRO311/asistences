@@ -95,15 +95,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (!outfitSuggestion) {
     const { data: profileForOutfit } = await service
       .from("profiles")
-      .select("location")
+      .select("location, full_name, age, gender")
       .eq("id", user.id)
-      .single<Pick<Profile, "location">>();
+      .single<Pick<Profile, "location" | "full_name" | "age" | "gender">>();
     const { location: resolvedLoc, weather: outfitWeather } = await resolveLocationAndWeather(
       updated.location ?? profileForOutfit?.location ?? null,
       updated.start_time
     ).catch(() => ({ location: updated.location ?? null, weather: null }));
     outfitSuggestion = await suggestOutfitForNotion(
-      updated.title, updated.description, resolvedLoc, outfitWeather
+      updated.title, updated.description, resolvedLoc, outfitWeather,
+      profileForOutfit ? { name: profileForOutfit.full_name, age: profileForOutfit.age, gender: profileForOutfit.gender } : null
     ).catch(() => null);
     if (outfitSuggestion) {
       await service.from("items").update({ outfit_suggestion: outfitSuggestion }).eq("id", id);

@@ -6,6 +6,8 @@ const updateProfileSchema = z.object({
   notion_database_id: z.string().min(1).optional(),
   timezone: z.string().min(1).optional(),
   full_name: z.string().min(1).optional(),
+  age: z.number().int().min(0).max(120).nullable().optional(),
+  gender: z.enum(["masculino", "femenino", "no_binario", "prefiero_no_decir"]).nullable().optional(),
   location: z.string().optional(),
   preferred_transport: z.enum(["car", "bike", "public_transport", "walking"]).nullable().optional(),
   extra_buffer_minutes: z.number().int().min(0).max(120).optional(),
