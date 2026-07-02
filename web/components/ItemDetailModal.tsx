@@ -132,26 +132,24 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
         </button>
       </div>
 
-      {/* Selector de modo de transporte */}
-      {data.travel && (
-        <div className="flex flex-wrap gap-1.5">
-          {TRANSPORT_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setSelectedTransport(opt.value)}
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                selectedTransport === opt.value
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border-soft hover:bg-surface"
-              }`}
-            >
-              <span aria-hidden>{opt.icon}</span>
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Selector de modo de transporte — siempre visible para regenerar la recomendación */}
+      <div className="flex flex-wrap gap-1.5">
+        {TRANSPORT_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setSelectedTransport(opt.value === selectedTransport ? null : opt.value)}
+            className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+              selectedTransport === opt.value
+                ? "border-foreground bg-foreground text-background"
+                : "border-border-soft hover:bg-surface"
+            }`}
+          >
+            <span aria-hidden>{opt.icon}</span>
+            {opt.label}
+          </button>
+        ))}
+      </div>
 
       {data.location && (
         <p className="text-sm text-muted">
