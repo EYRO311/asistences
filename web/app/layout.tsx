@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Caveat } from "next/font/google";
 import "./globals.css";
 import { NavBar } from "@/components/NavBar";
-import { InlineScript } from "@/components/InlineScript";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { createClient } from "@/lib/supabase/server";
 
@@ -65,7 +64,8 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <InlineScript html={themeInitScript(serverTheme)} />
+        {/* Script de tema: debe correr antes del primer paint para evitar flash */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript(serverTheme) }} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <NavBar />
