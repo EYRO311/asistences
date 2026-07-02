@@ -237,7 +237,10 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
       importedFromGoogle += 1;
     }
   } catch (err) {
-    errors.push(`Google Calendar: ${err instanceof Error ? err.message : "no se pudo sincronizar"}`);
+    const msg = err instanceof Error ? err.message : "no se pudo sincronizar";
+    if (!msg.includes("no tiene conectada")) {
+      errors.push(`Google Calendar: ${msg}`);
+    }
   }
 
   // --- Notion -> app (+ espejo en Google Calendar) ---
@@ -324,7 +327,10 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
       }
     }
   } catch (err) {
-    errors.push(`Notion: ${err instanceof Error ? err.message : "no se pudo sincronizar"}`);
+    const msg = err instanceof Error ? err.message : "no se pudo sincronizar";
+    if (!msg.includes("no tiene conectada")) {
+      errors.push(`Notion: ${msg}`);
+    }
   }
 
   let mergedDuplicates = 0;
