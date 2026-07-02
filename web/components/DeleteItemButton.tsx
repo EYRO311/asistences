@@ -16,7 +16,7 @@ export function DeleteItemButton({ itemId, label = "Eliminar" }: { itemId: strin
       const res = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "No se pudo eliminar");
+        throw new Error(typeof data.error === "string" ? data.error : "No se pudo eliminar");
       }
       setOpen(false);
       router.refresh();

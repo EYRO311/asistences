@@ -107,7 +107,7 @@ export function EditItemForm({ item }: { item: Item }) {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message ?? data.error ?? "No se pudo actualizar la tarea");
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : (data.error?.message ?? "No se pudo actualizar la tarea"));
 
       sileo.success({ title: "Guardado", description: "Los cambios se guardaron correctamente." });
       router.push("/");

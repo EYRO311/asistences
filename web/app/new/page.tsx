@@ -125,7 +125,7 @@ export default function NewItemPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message ?? data.error ?? "No se pudo crear la tarea");
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : (data.error?.message ?? "No se pudo crear la tarea"));
 
       router.push("/");
       router.refresh();

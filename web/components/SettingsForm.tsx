@@ -224,7 +224,7 @@ export function SettingsForm({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message ?? data.error ?? "No se pudo guardar");
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : (data.error?.message ?? "No se pudo guardar"));
 
       sileo.success({ title: "Guardado", description: "Los ajustes se guardaron correctamente." });
       router.refresh();

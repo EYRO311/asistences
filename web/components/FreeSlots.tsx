@@ -93,7 +93,7 @@ export function FreeSlots() {
     fetch(`/api/calendar/free-slots?${params.toString()}`)
       .then(async (res) => {
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Error al obtener huecos libres");
+        if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Error al obtener huecos libres");
         setSlots(data.days ?? data);
       })
       .catch((err) => {
