@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const accessToken = await getValidGoogleAccessToken(user.id);
     const service = createServiceRoleClient();
 
     const { data: profile } = await service
@@ -54,12 +53,15 @@ export async function GET(request: NextRequest) {
     const timeMin = new Date(parsed.data.time_min);
     const timeMax = new Date(parsed.data.time_max);
 
-    // Intervalos ocupados de Google Calendar
-    const googleBusy = await fetchBusyIntervals(
-      accessToken,
-      parsed.data.time_min,
-      parsed.data.time_max
-    );
+    // Intervalos ocupados de Google Calendar (vacío si el usuario no tiene conectada su cuenta)
+    let googleBusy: { start: Date; end: Date }[] = [];
+    try {
+      const accessToken = await getValidGoogleAccessToken(user.id);
+      googleBusy = await fetchBusyIntervals(accessToken, parsed.data.time_min, parsed.data.time_max);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.includes("no tiene conectada")) throw err;
+    }
 
     // Intervalos extra: tareas en Supabase sin evento de Google Calendar
     const { data: itemsRaw } = await service
