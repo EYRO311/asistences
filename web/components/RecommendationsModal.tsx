@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CachedRecommendation, PreferredTransport } from "@/lib/types";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
+import { sileo } from "sileo";
 
 export function RecommendationsModal({
   itemId,
@@ -13,7 +14,6 @@ export function RecommendationsModal({
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<CachedRecommendation | null>(initialData ?? null);
   const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(
     initialData?.preferredTransport ?? null
@@ -24,7 +24,6 @@ export function RecommendationsModal({
     if (data) return;
 
     setLoading(true);
-    setError(null);
     try {
       const res = await fetch(`/api/items/${itemId}/recommendations`);
       const json = await res.json();
@@ -32,7 +31,7 @@ export function RecommendationsModal({
       setData(json);
       setSelectedTransport(json.preferredTransport ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -40,7 +39,6 @@ export function RecommendationsModal({
 
   async function handleRefresh(transport?: PreferredTransport | null) {
     setLoading(true);
-    setError(null);
     try {
       const params = new URLSearchParams({ refresh: "1" });
       if (transport) params.set("transport", transport);
@@ -50,7 +48,7 @@ export function RecommendationsModal({
       setData(json);
       setSelectedTransport(json.preferredTransport ?? transport ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -97,9 +95,8 @@ export function RecommendationsModal({
             </div>
 
             {loading && <p className="text-sm text-muted">Consultando clima, rutas y generando recomendaciones...</p>}
-            {error && <p className="text-sm text-red-600">{error}</p>}
 
-            {!loading && !error && data && (
+            {!loading && data && (
               <div className="space-y-3 text-sm">
                 {/* Selector de modo de transporte */}
                 {data.travel && (

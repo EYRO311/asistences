@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { sileo } from "sileo";
 
 type Mode = "signin" | "signup" | "recover";
 
@@ -13,14 +14,10 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setMessage(null);
     setLoading(true);
 
     try {
@@ -33,16 +30,16 @@ export default function LoginPage() {
       } else if (mode === "signup") {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setMessage("Cuenta creada. Revisa tu correo para confirmar tu registro.");
+        sileo.success({ title: "Cuenta creada", description: "Revisa tu correo para confirmar tu registro." });
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/actualizar-password`,
         });
         if (error) throw error;
-        setMessage("Si ese correo está registrado, te enviamos un enlace para restablecer tu contraseña.");
+        sileo.info({ title: "Correo enviado", description: "Si ese correo está registrado, te enviamos un enlace para restablecer tu contraseña." });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -97,19 +94,12 @@ export default function LoginPage() {
           {mode === "signin" && (
             <button
               type="button"
-              onClick={() => {
-                setMode("recover");
-                setError(null);
-                setMessage(null);
-              }}
+              onClick={() => setMode("recover")}
               className="text-xs text-muted underline hover:text-foreground"
             >
               ¿Olvidaste tu contraseña?
             </button>
           )}
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {message && <p className="text-sm text-green-600">{message}</p>}
 
           <button
             type="submit"
@@ -129,11 +119,7 @@ export default function LoginPage() {
         {mode === "recover" ? (
           <button
             type="button"
-            onClick={() => {
-              setMode("signin");
-              setError(null);
-              setMessage(null);
-            }}
+            onClick={() => setMode("signin")}
             className="w-full text-center text-sm text-muted hover:text-foreground"
           >
             Volver a iniciar sesión

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Category, Effort, Item, Priority, TaskStatus } from "@/lib/types";
-import { ErrorBanner } from "@/components/ErrorBanner";
+import { sileo } from "sileo";
 import {
   CATEGORY_OPTIONS,
   EFFORT_OPTIONS,
@@ -49,7 +49,6 @@ export function EditItemForm({ item }: { item: Item }) {
   const [recurrenceStartTime, setRecurrenceStartTime] = useState(item.recurrence_start_time ?? "09:00");
   const [recurrenceEndTime, setRecurrenceEndTime] = useState(item.recurrence_end_time ?? "18:00");
 
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   function toggleCategory(category: Category) {
@@ -67,7 +66,6 @@ export function EditItemForm({ item }: { item: Item }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     try {
@@ -111,10 +109,11 @@ export function EditItemForm({ item }: { item: Item }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message ?? data.error ?? "No se pudo actualizar la tarea");
 
+      sileo.success({ title: "Guardado", description: "Los cambios se guardaron correctamente." });
       router.push("/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error al guardar", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -277,8 +276,6 @@ export function EditItemForm({ item }: { item: Item }) {
           {item.notion_page_id ? " la página de Notion" : ""} asociados.
         </p>
       )}
-
-      {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
       <div className="flex gap-3">
         <button

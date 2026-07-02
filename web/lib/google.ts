@@ -14,6 +14,7 @@ export function getGoogleOAuthClient() {
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/gmail.readonly",
   "openid",
   "email",
   "profile",
@@ -181,6 +182,8 @@ export interface RemoteCalendarEvent {
   allDay: boolean;
   /** ID del evento maestro cuando este es una ocurrencia de un evento recurrente. */
   recurringEventId?: string;
+  /** URL de la videollamada (Google Meet, Zoom, etc.) si el evento tiene conferencia. */
+  meetLink?: string;
 }
 
 /**
@@ -215,6 +218,11 @@ export async function listCalendarEvents(
       const end = event.end?.dateTime ?? event.end?.date;
       if (!start) continue;
 
+      const meetLink =
+        (event.conferenceData?.entryPoints ?? []).find(
+          (ep) => ep.entryPointType === "video"
+        )?.uri ?? event.hangoutLink ?? undefined;
+
       events.push({
         id: event.id,
         title: event.summary ?? "(sin título)",
@@ -223,6 +231,7 @@ export async function listCalendarEvents(
         end: end ?? null,
         allDay,
         recurringEventId: event.recurringEventId ?? undefined,
+        meetLink,
       });
     }
 
@@ -263,5 +272,76 @@ export async function deleteCalendarEvent(accessToken: string, eventId: string):
     if (status !== 404 && status !== 410) {
       throw err;
     }
+  }
+}
+
+export interface GmailMessage {
+  id: string;
+  from: string;
+  subject: string;
+  snippet: string;
+  date: string;
+  unread: boolean;
+}
+
+function getGmailClient(accessToken: string) {
+  const oauth2Client = getGoogleOAuthClient();
+  oauth2Client.setCredentials({ access_token: accessToken });
+  return google.gmail({ version: "v1", auth: oauth2Client });
+}
+
+function decodeHeader(value: string): string {
+  return value.replace(/=\?UTF-8\?[BQ]\?([^?]+)\?=/gi, (_, encoded) => {
+    try { return Buffer.from(encoded, "base64").toString("utf8"); } catch { return encoded; }
+  });
+}
+
+/**
+ * Trae los últimos N correos del inbox (leídos + no leídos).
+ * Si el token no tiene scope de Gmail devuelve [] en lugar de lanzar.
+ */
+export async function fetchInboxEmails(
+  accessToken: string,
+  maxResults = 8
+): Promise<GmailMessage[]> {
+  try {
+    const gmail = getGmailClient(accessToken);
+
+    const list = await gmail.users.messages.list({
+      userId: "me",
+      labelIds: ["INBOX"],
+      maxResults,
+    });
+
+    const ids = list.data.messages ?? [];
+    if (!ids.length) return [];
+
+    const messages = await Promise.all(
+      ids.map((m) =>
+        gmail.users.messages.get({
+          userId: "me",
+          id: m.id!,
+          format: "metadata",
+          metadataHeaders: ["From", "Subject", "Date"],
+        })
+      )
+    );
+
+    return messages.map((res) => {
+      const headers = res.data.payload?.headers ?? [];
+      const get = (name: string) =>
+        decodeHeader(headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "");
+      const labelIds = res.data.labelIds ?? [];
+      return {
+        id: res.data.id!,
+        from: get("From"),
+        subject: get("Subject") || "(sin asunto)",
+        snippet: res.data.snippet ?? "",
+        date: get("Date"),
+        unread: labelIds.includes("UNREAD"),
+      };
+    });
+  } catch {
+    return [];
   }
 }

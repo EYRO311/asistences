@@ -4,6 +4,7 @@ import "./globals.css";
 import { NavBar } from "@/components/NavBar";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { createClient } from "@/lib/supabase/server";
+import { Toaster } from "sileo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -71,6 +72,7 @@ export default async function RootLayout({
         <NavBar />
         <div className={`flex-1 ${user ? "pb-20 md:pb-0" : ""}`}>{children}</div>
         {user && <MobileBottomNav />}
+        <Toaster position="bottom-right" />
       </body>
     </html>
   );

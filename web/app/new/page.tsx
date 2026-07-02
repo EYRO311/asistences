@@ -15,7 +15,7 @@ import { LocationField } from "@/components/LocationField";
 import { WorkSchedulePicker } from "@/components/WorkSchedulePicker";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { nextOccurrence } from "@/lib/recurrence";
-import { ErrorBanner } from "@/components/ErrorBanner";
+import { sileo } from "sileo";
 
 const TYPE_OPTIONS: { value: ItemType; label: string; defaultCalendar: boolean }[] = [
   { value: "compromiso", label: "Compromiso", defaultCalendar: true },
@@ -53,7 +53,6 @@ export default function NewItemPage() {
   const [recurrenceStartTime, setRecurrenceStartTime] = useState("09:00");
   const [recurrenceEndTime, setRecurrenceEndTime] = useState("18:00");
 
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -86,7 +85,6 @@ export default function NewItemPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     try {
@@ -132,7 +130,7 @@ export default function NewItemPage() {
       router.push("/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error al crear", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -300,8 +298,6 @@ export default function NewItemPage() {
         <p className="text-xs text-muted">
           La vestimenta sugerida se genera automáticamente con IA al guardar y se ve en Notion / al editar la tarea.
         </p>
-
-        {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
         <button
           type="submit"

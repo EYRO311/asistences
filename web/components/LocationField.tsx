@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { sileo } from "sileo";
 
 export function LocationField({
   id,
@@ -14,16 +15,14 @@ export function LocationField({
   placeholder?: string;
 }) {
   const [detecting, setDetecting] = useState(false);
-  const [detectError, setDetectError] = useState<string | null>(null);
 
   function detectLocation() {
     if (!navigator.geolocation) {
-      setDetectError("Tu navegador no soporta detección de ubicación");
+      sileo.error({ title: "No disponible", description: "Tu navegador no soporta detección de ubicación." });
       return;
     }
 
     setDetecting(true);
-    setDetectError(null);
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -37,38 +36,45 @@ export function LocationField({
           if (parts.length === 0) throw new Error("Sin resultados");
           onChange(parts.join(", "));
         } catch {
-          setDetectError("No se pudo detectar tu ubicación, escríbela manualmente");
+          sileo.error({ title: "Error", description: "No se pudo convertir la ubicación, escríbela manualmente." });
         } finally {
           setDetecting(false);
         }
       },
-      () => {
-        setDetectError("Permiso de ubicación denegado, escríbela manualmente");
+      (err) => {
         setDetecting(false);
-      }
+        if (err.code === 1) {
+          sileo.warning({
+            title: "Permiso denegado",
+            description: "Activa el permiso de ubicación en tu navegador o escríbela manualmente.",
+          });
+        } else if (err.code === 2) {
+          sileo.error({ title: "Ubicación no disponible", description: "No se pudo obtener tu posición. Escríbela manualmente." });
+        } else {
+          sileo.error({ title: "Tiempo agotado", description: "La detección tardó demasiado. Escríbela manualmente." });
+        }
+      },
+      { timeout: 10000 }
     );
   }
 
   return (
-    <div>
-      <div className="flex gap-2">
-        <input
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
-        />
-        <button
-          type="button"
-          onClick={detectLocation}
-          disabled={detecting}
-          className="shrink-0 whitespace-nowrap rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
-        >
-          {detecting ? "Detectando..." : "📍 Usar mi ubicación"}
-        </button>
-      </div>
-      {detectError && <p className="mt-1 text-xs text-red-600">{detectError}</p>}
+    <div className="flex gap-2">
+      <input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
+      />
+      <button
+        type="button"
+        onClick={detectLocation}
+        disabled={detecting}
+        className="shrink-0 whitespace-nowrap rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
+      >
+        {detecting ? "Detectando..." : "📍 Usar mi ubicación"}
+      </button>
     </div>
   );
 }

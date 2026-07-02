@@ -3,6 +3,7 @@ import { geocodeLocation, getDailyWeather, type DailyWeather } from "@/lib/weath
 import type { Item, Profile } from "@/lib/types";
 import Link from "next/link";
 import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS } from "@/lib/itemPresentation";
+import { GmailInbox } from "@/components/GmailInbox";
 
 // ── Weather helpers ─────────────────────────────────────────────────────────
 
@@ -280,6 +281,18 @@ export default async function HomePage() {
                     )}
                   </div>
 
+                  {item.meet_link && (
+                    <a
+                      href={item.meet_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 rounded-full border border-border-soft px-2 py-0.5 text-[10px] hover:bg-surface"
+                    >
+                      📹 Meet
+                    </a>
+                  )}
+
                   {isNow && (
                     <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
                   )}
@@ -341,6 +354,8 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+      {/* ── Correos recientes ── */}
+      <GmailInbox />
     </main>
   );
 }

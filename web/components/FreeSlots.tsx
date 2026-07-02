@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { FreeSlot } from "@/lib/types";
+import { sileo } from "sileo";
 import {
   BUSY_DOT_COLOR,
   BUSY_TEXT_COLORS,
@@ -75,7 +76,7 @@ function formatTime(date: Date): string {
 
 export function FreeSlots() {
   const [slots, setSlots] = useState<FreeSlot[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -95,7 +96,10 @@ export function FreeSlots() {
         if (!res.ok) throw new Error(data.error ?? "Error al obtener huecos libres");
         setSlots(data.days ?? data);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Error desconocido"))
+      .catch((err) => {
+        setFailed(true);
+        sileo.error({ title: "Error", description: err instanceof Error ? err.message : "No se pudieron calcular los días libres" });
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -103,10 +107,10 @@ export function FreeSlots() {
     return <p className="text-sm text-muted">Calculando días libres...</p>;
   }
 
-  if (error) {
+  if (failed) {
     return (
       <p className="text-sm text-muted">
-        No se pudieron calcular los días libres ({error}). Conecta tu cuenta de Google en Ajustes.
+        No se pudieron calcular los días libres. Conecta tu cuenta de Google en Ajustes.
       </p>
     );
   }

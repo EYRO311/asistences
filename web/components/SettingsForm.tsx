@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Gender, Integration, PreferredTransport, Profile } from "@/lib/types";
 import { LocationField } from "@/components/LocationField";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
-import { ErrorBanner } from "@/components/ErrorBanner";
+import { sileo } from "sileo";
 
 function NotionHelpModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<"find" | "create">("find");
@@ -193,8 +193,6 @@ export function SettingsForm({
   const [extraBuffer, setExtraBuffer] = useState(profile.extra_buffer_minutes ?? 0);
   const [wakeTime, setWakeTime] = useState(profile.wake_time ?? "06:00");
   const [sleepTime, setSleepTime] = useState(profile.sleep_time ?? "23:00");
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showNotionHelp, setShowNotionHelp] = useState(false);
 
@@ -205,8 +203,6 @@ export function SettingsForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSaved(false);
     setLoading(true);
 
     try {
@@ -230,10 +226,10 @@ export function SettingsForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message ?? data.error ?? "No se pudo guardar");
 
-      setSaved(true);
+      sileo.success({ title: "Guardado", description: "Los ajustes se guardaron correctamente." });
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error al guardar", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -293,10 +289,12 @@ export function SettingsForm({
               <input
                 id="age"
                 type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 min={0}
                 max={120}
                 value={age}
-                onChange={(e) => setAge(e.target.value)}
+                onChange={(e) => setAge(e.target.value.replace(/\D/g, ""))}
                 placeholder="Ej. 25"
                 className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
               />
@@ -504,13 +502,6 @@ export function SettingsForm({
             </p>
           </div>
         </>
-      )}
-
-      {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
-      {saved && (
-        <p className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
-          <span aria-hidden>✓</span> Guardado correctamente
-        </p>
       )}
 
       <button

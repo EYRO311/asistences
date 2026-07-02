@@ -2,16 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { sileo } from "sileo";
 
 export function DeleteItemButton({ itemId, label = "Eliminar" }: { itemId: string; label?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleConfirmDelete() {
     setLoading(true);
-    setError(null);
 
     try {
       const res = await fetch(`/api/items/${itemId}`, { method: "DELETE" });
@@ -22,7 +21,7 @@ export function DeleteItemButton({ itemId, label = "Eliminar" }: { itemId: strin
       setOpen(false);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error al eliminar", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -48,8 +47,6 @@ export function DeleteItemButton({ itemId, label = "Eliminar" }: { itemId: strin
               Se borrará también <strong>el evento de Google Calendar</strong> y se{" "}
               <strong>archivará la página de Notion</strong> asociados. Esta acción no se puede deshacer.
             </p>
-
-            {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
             <div className="flex gap-3">
               <button

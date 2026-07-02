@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { sileo } from "sileo";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
@@ -11,8 +12,6 @@ export default function UpdatePasswordPage() {
   const [ready, setReady] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -31,11 +30,9 @@ export default function UpdatePasswordPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setMessage(null);
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden");
+      sileo.error({ title: "Error", description: "Las contraseñas no coinciden" });
       return;
     }
 
@@ -43,11 +40,11 @@ export default function UpdatePasswordPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      setMessage("Contraseña actualizada. Redirigiendo...");
+      sileo.success({ title: "Contraseña actualizada", description: "Redirigiendo..." });
       router.push("/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      sileo.error({ title: "Error", description: err instanceof Error ? err.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -95,9 +92,6 @@ export default function UpdatePasswordPage() {
                 className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
               />
             </div>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            {message && <p className="text-sm text-green-600">{message}</p>}
 
             <button
               type="submit"

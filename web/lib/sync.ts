@@ -184,6 +184,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
         const patch: Record<string, unknown> = {};
         if (!existingMatch.google_event_id) patch.google_event_id = event.id;
         if (!existingMatch.description && event.description) patch.description = event.description;
+        if (event.meetLink && !existingMatch.meet_link) patch.meet_link = event.meetLink;
         if (Object.keys(patch).length > 0) {
           await supabase.from("items").update(patch).eq("id", existingMatch.id);
         }
@@ -203,6 +204,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
           add_to_calendar: true,
           status: "syncing",
           google_event_id: event.recurringEventId ?? event.id,
+          meet_link: event.meetLink ?? null,
           source: "google_sync",
         })
         .select("*")

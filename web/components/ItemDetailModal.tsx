@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { sileo } from "sileo";
 import type { CachedRecommendation, Item, PreferredTransport, TravelEstimate } from "@/lib/types";
 import {
   TYPE_BADGE_COLORS,
@@ -70,14 +71,12 @@ function TravelBlock({
 function RecommendationsInline({ itemId, initial }: { itemId: string; initial: CachedRecommendation | null }) {
   const [data, setData] = useState<CachedRecommendation | null>(initial);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(
     initial?.preferredTransport ?? null
   );
 
   async function load(refresh = false, transport?: PreferredTransport | null) {
     setLoading(true);
-    setError(null);
     try {
       const params = new URLSearchParams();
       if (refresh) params.set("refresh", "1");
@@ -89,7 +88,7 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
       setData(json);
       setSelectedTransport(json.preferredTransport ?? transport ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error desconocido");
+      sileo.error({ title: "Error", description: e instanceof Error ? e.message : "Error desconocido" });
     } finally {
       setLoading(false);
     }
@@ -134,7 +133,6 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
         >
           ✨ Cargar recomendaciones
         </button>
-        {error && <p className="text-sm text-red-500">{error}</p>}
       </div>
     );
   }
@@ -189,7 +187,6 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
         </div>
       )}
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
     </div>
   );
 }
@@ -276,6 +273,19 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
             <p className="text-muted">
               <span aria-hidden>👕 </span>{item.outfit_suggestion}
             </p>
+          )}
+
+          {/* Meet / videollamada */}
+          {item.meet_link && (
+            <a
+              href={item.meet_link}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm hover:bg-background transition-colors"
+            >
+              <span aria-hidden>📹</span>
+              Unirse a la videollamada
+            </a>
           )}
 
           <hr className="border-border-soft" />

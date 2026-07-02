@@ -65,6 +65,7 @@ export interface Item {
   location: string | null;
   source: ItemSource;
   cached_recommendation: CachedRecommendation | null;
+  meet_link: string | null;
   recurrence_days: number[]; // 1=lunes ... 7=domingo
   recurrence_start_time: string | null; // "HH:mm"
   recurrence_end_time: string | null; // "HH:mm"
