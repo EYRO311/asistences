@@ -77,13 +77,27 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     if (key) byDuplicateKey.set(key, item);
   }
 
-  // Mapa para detectar rutinas locales que coincidan con eventos recurrentes de
-  // Google: clave = "título normalizado|HH:mm" usando recurrence_start_time.
+  // Mapa para detectar rutinas locales (creadas en la app) que coincidan con
+  // eventos recurrentes de Google: clave = "título|HH:mm" (recurrence_start_time).
   const routineByTitleAndTime = new Map<string, Item>();
   for (const item of existingItems) {
     if (item.recurrence_days?.length && item.recurrence_start_time) {
       const key = `${item.title.trim().toLowerCase()}|${item.recurrence_start_time}`;
       routineByTitleAndTime.set(key, item);
+    }
+  }
+
+  // Mapa para detectar ítems ya importados de Google (google_sync) que podrían
+  // tener guardado el ID de instancia en lugar del ID maestro (formato anterior).
+  // Clave = "título|HH:mm" extraído del start_time real del ítem.
+  const googleSyncByTitleAndTime = new Map<string, Item>();
+  for (const item of existingItems) {
+    if (item.source === "google_sync" && item.start_time) {
+      const hhmm = extractHHMM(item.start_time);
+      if (hhmm) {
+        const key = `${item.title.trim().toLowerCase()}|${hhmm}`;
+        googleSyncByTitleAndTime.set(key, item);
+      }
     }
   }
 
@@ -115,19 +129,24 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
       if (event.recurringEventId) {
         if (importedRecurringIds.has(event.recurringEventId)) continue;
 
-        // Si ya existe una rutina local con el mismo nombre y mismo horario
-        // (HH:mm), considerarlas la misma — no crear un duplicado en Notion.
+        // Si ya existe en la BD una rutina o un ítem de google_sync con el
+        // mismo título y mismo horario (HH:mm), considerarlos la misma serie.
+        // Actualiza el google_event_id al ID maestro si era una instancia antigua.
         if (!event.allDay) {
           const eventHHMM = extractHHMM(event.start);
           if (eventHHMM) {
-            const routineKey = `${event.title.trim().toLowerCase()}|${eventHHMM}`;
-            const matchingRoutine = routineByTitleAndTime.get(routineKey);
-            if (matchingRoutine) {
-              importedRecurringIds.add(event.recurringEventId);
-              // Vincular el evento de Google a la rutina si aún no está vinculada.
-              if (!matchingRoutine.google_event_id) {
-                const masterGoogleId = event.recurringEventId;
-                await supabase.from("items").update({ google_event_id: masterGoogleId }).eq("id", matchingRoutine.id);
+            const titleTimeKey = `${event.title.trim().toLowerCase()}|${eventHHMM}`;
+            const masterGoogleId = event.recurringEventId;
+
+            const matchingItem =
+              routineByTitleAndTime.get(titleTimeKey) ??
+              googleSyncByTitleAndTime.get(titleTimeKey);
+
+            if (matchingItem) {
+              importedRecurringIds.add(masterGoogleId);
+              // Actualizar al ID maestro si el ítem tiene un ID de instancia o está sin vincular.
+              if (matchingItem.google_event_id !== masterGoogleId) {
+                await supabase.from("items").update({ google_event_id: masterGoogleId }).eq("id", matchingItem.id);
                 knownGoogleIds.add(masterGoogleId);
               }
               continue;
