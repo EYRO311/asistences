@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { friendlyError } from "@/components/ErrorBanner";
 
 const SYNCED_FLAG = "syncedThisSession";
 
@@ -14,41 +15,40 @@ interface SyncApiResult {
 
 async function runSync(): Promise<SyncApiResult> {
   const res = await fetch("/api/sync", { method: "POST" });
-  if (!res.ok) throw new Error("Sync falló");
+  if (!res.ok) throw new Error("No se pudo conectar con el servidor");
   return res.json();
 }
 
-function summarize(result: SyncApiResult): string | null {
+function summarize(result: SyncApiResult): { text: string | null; errors: string[] } {
   const imported = result.importedFromGoogle + result.importedFromNotion;
   const parts: string[] = [];
-  if (imported > 0) parts.push(`${imported} importada(s)`);
-  if (result.mergedDuplicates > 0) parts.push(`${result.mergedDuplicates} unida(s)`);
-  return parts.length > 0 ? parts.join(", ") : null;
+  if (imported > 0) parts.push(`${imported} importada${imported > 1 ? "s" : ""}`);
+  if (result.mergedDuplicates > 0) parts.push(`${result.mergedDuplicates} duplicado${result.mergedDuplicates > 1 ? "s" : ""} unidos`);
+  return { text: parts.length > 0 ? parts.join(", ") : null, errors: result.errors ?? [] };
 }
 
 export function SyncWidget() {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [syncErrors, setSyncErrors] = useState<string[]>([]);
+  const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem(SYNCED_FLAG)) return;
-
     sessionStorage.setItem(SYNCED_FLAG, "1");
     setSyncing(true);
 
     runSync()
       .then((result) => {
-        const summary = summarize(result);
-        if (summary) {
-          setMessage(summary);
-          router.refresh();
-        }
+        const { text, errors } = summarize(result);
+        if (text) { setMessage(text); router.refresh(); }
+        if (errors.length > 0) setSyncErrors(errors);
       })
       .catch(() => {})
       .finally(() => {
         setSyncing(false);
-        setTimeout(() => setMessage(null), 4000);
+        setTimeout(() => setMessage(null), 5000);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -56,24 +56,58 @@ export function SyncWidget() {
   async function handleManualSync() {
     setSyncing(true);
     setMessage(null);
+    setSyncErrors([]);
+    setShowErrors(false);
 
     try {
       const result = await runSync();
       sessionStorage.setItem(SYNCED_FLAG, "1");
-      const summary = summarize(result);
-      setMessage(summary ?? "Sin novedades");
-      if (summary) router.refresh();
-    } catch {
-      setMessage("Error al sincronizar");
+      const { text, errors } = summarize(result);
+      setMessage(text ?? "Sin novedades");
+      if (errors.length > 0) setSyncErrors(errors);
+      if (text) router.refresh();
+    } catch (err) {
+      const { message: msg } = friendlyError(err instanceof Error ? err.message : "Error");
+      setMessage(msg);
     } finally {
       setSyncing(false);
-      setTimeout(() => setMessage(null), 4000);
+      setTimeout(() => setMessage(null), 5000);
     }
   }
 
   return (
     <div className="flex items-center gap-2">
-      {message && <span className="text-xs text-muted">{message}</span>}
+      {message && (
+        <span className={`text-xs ${syncErrors.length > 0 ? "text-amber-500" : "text-muted"}`}>
+          {message}
+          {syncErrors.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowErrors((v) => !v)}
+              className="ml-1 underline"
+            >
+              ({syncErrors.length} error{syncErrors.length > 1 ? "es" : ""})
+            </button>
+          )}
+        </span>
+      )}
+      {showErrors && syncErrors.length > 0 && (
+        <div className="absolute top-12 right-4 z-50 w-72 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/50 p-3 text-xs shadow-lg">
+          <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">Errores al sincronizar:</p>
+          <ul className="space-y-1 text-amber-700 dark:text-amber-300">
+            {syncErrors.map((e, i) => (
+              <li key={i}>{friendlyError(e).message}</li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setShowErrors(false)}
+            className="mt-2 text-amber-600 dark:text-amber-400 underline"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
       <button
         type="button"
         onClick={handleManualSync}

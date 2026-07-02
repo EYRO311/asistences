@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Category, Effort, Item, Priority, TaskStatus } from "@/lib/types";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import {
   CATEGORY_OPTIONS,
   EFFORT_OPTIONS,
@@ -277,7 +278,7 @@ export function EditItemForm({ item }: { item: Item }) {
         </p>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
       <div className="flex gap-3">
         <button

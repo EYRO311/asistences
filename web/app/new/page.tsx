@@ -15,6 +15,7 @@ import { LocationField } from "@/components/LocationField";
 import { WorkSchedulePicker } from "@/components/WorkSchedulePicker";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { nextOccurrence } from "@/lib/recurrence";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 const TYPE_OPTIONS: { value: ItemType; label: string; defaultCalendar: boolean }[] = [
   { value: "compromiso", label: "Compromiso", defaultCalendar: true },
@@ -300,7 +301,7 @@ export default function NewItemPage() {
           La vestimenta sugerida se genera automáticamente con IA al guardar y se ve en Notion / al editar la tarea.
         </p>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
 
         <button
           type="submit"

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Integration, PreferredTransport, Profile } from "@/lib/types";
 import { LocationField } from "@/components/LocationField";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 function NotionHelpModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<"find" | "create">("find");
@@ -388,8 +389,12 @@ export function SettingsForm({
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {saved && <p className="text-sm text-green-600">Guardado.</p>}
+          {error && <ErrorBanner error={error} onDismiss={() => setError(null)} />}
+          {saved && (
+            <p className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+              <span aria-hidden>✓</span> Guardado correctamente
+            </p>
+          )}
 
           <button
             type="submit"
