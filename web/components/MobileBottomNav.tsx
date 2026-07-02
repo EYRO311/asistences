@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/", icon: "🏠", label: "Día" },
+  { href: "/", icon: "🏠", label: "Inicio" },
   { href: "/semana", icon: "📅", label: "Semana" },
 ];
 
