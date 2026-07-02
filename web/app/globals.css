@@ -37,3 +37,11 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Sileo toast: fix description text contrast */
+[data-sileo-viewport][data-theme=dark] [data-sileo-description] {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+[data-sileo-viewport][data-theme=light] [data-sileo-description] {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
