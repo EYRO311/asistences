@@ -4,7 +4,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { deleteItem, SagaError } from "@/lib/saga/createItem";
 import { getValidGoogleAccessToken, updateCalendarEvent } from "@/lib/google";
 import { getNotionAccessToken, updateItemNotionPage } from "@/lib/notion";
-import { suggestOutfit, suggestOutfitForNotion } from "@/lib/gemini";
+import { suggestOutfitForNotion } from "@/lib/gemini";
 import { resolveLocationAndWeather } from "@/lib/weather";
 import type { Item, Profile } from "@/lib/types";
 
@@ -90,10 +90,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   // Si a la tarea le falta la vestimenta sugerida (p. ej. se importó por
-  // sincronización, o falló al crearla), la generamos ahora al guardar.
+  // sincronización, o falló al crearla), la generamos ahora al guardar con clima.
   let outfitSuggestion = updated.outfit_suggestion;
   if (!outfitSuggestion) {
-    outfitSuggestion = await suggestOutfit(updated.title, updated.description).catch(() => null);
+    const { data: profileForOutfit } = await service
+      .from("profiles")
+      .select("location")
+      .eq("id", user.id)
+      .single<Pick<Profile, "location">>();
+    const { location: resolvedLoc, weather: outfitWeather } = await resolveLocationAndWeather(
+      updated.location ?? profileForOutfit?.location ?? null,
+      updated.start_time
+    ).catch(() => ({ location: updated.location ?? null, weather: null }));
+    outfitSuggestion = await suggestOutfitForNotion(
+      updated.title, updated.description, resolvedLoc, outfitWeather
+    ).catch(() => null);
     if (outfitSuggestion) {
       await service.from("items").update({ outfit_suggestion: outfitSuggestion }).eq("id", id);
       updated.outfit_suggestion = outfitSuggestion;

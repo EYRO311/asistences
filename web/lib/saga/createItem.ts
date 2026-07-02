@@ -9,7 +9,7 @@ import {
   createItemNotionPage,
   getNotionAccessToken,
 } from "@/lib/notion";
-import { suggestOutfit, suggestOutfitForNotion } from "@/lib/gemini";
+import { suggestOutfitForNotion } from "@/lib/gemini";
 import { resolveLocationAndWeather } from "@/lib/weather";
 import type { CreateItemInput, Item, Profile } from "@/lib/types";
 
@@ -121,22 +121,20 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
       );
     }
 
-    // Sugerencia simple (sin clima): se guarda en Supabase y es la que se ve dentro de la app.
-    const outfitSuggestion = await suggestOutfit(item.title, item.description).catch(() => null);
-
-    // Sugerencia validada contra clima/ubicación: solo se guarda en la columna "vestimenta" de Notion.
+    // Obtener clima y ubicación para la sugerencia de vestimenta.
     const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
       item.location ?? profile.location ?? null,
       item.start_time
     ).catch(() => ({ location: item.location ?? profile.location ?? null, weather: null }));
 
-    const notionOutfitSuggestion =
-      (await suggestOutfitForNotion(item.title, item.description, resolvedLocation, weather).catch(() => null)) ??
-      outfitSuggestion;
+    // Sugerencia con clima: se usa tanto en la app como en Notion.
+    const outfitSuggestion = await suggestOutfitForNotion(
+      item.title, item.description, resolvedLocation, weather
+    ).catch(() => null);
 
     const notionToken = await getNotionAccessToken(userId);
     const { pageId, url } = await createItemNotionPage(notionToken, profile.notion_database_id, item, {
-      outfitSuggestion: notionOutfitSuggestion,
+      outfitSuggestion,
     });
 
     // --- Paso 4: confirmar ---
