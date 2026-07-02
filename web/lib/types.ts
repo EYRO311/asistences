@@ -83,6 +83,7 @@ export interface Profile {
   location: string | null;
   preferred_transport: PreferredTransport | null;
   extra_buffer_minutes: number;
+  theme: "light" | "dark" | null;
   created_at: string;
 }
 

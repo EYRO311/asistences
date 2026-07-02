@@ -23,6 +23,11 @@ export function ThemeToggle() {
   function select(next: Theme) {
     setTheme(next);
     applyTheme(next);
+    fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: next }),
+    }).catch(() => {});
   }
 
   return (

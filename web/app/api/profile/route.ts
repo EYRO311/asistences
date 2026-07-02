@@ -9,6 +9,7 @@ const updateProfileSchema = z.object({
   location: z.string().optional(),
   preferred_transport: z.enum(["car", "bike", "public_transport", "walking"]).nullable().optional(),
   extra_buffer_minutes: z.number().int().min(0).max(120).optional(),
+  theme: z.enum(["light", "dark"]).nullable().optional(),
 });
 
 export async function GET() {

@@ -26,17 +26,17 @@ export const metadata: Metadata = {
   description: "Asistente de agenda con Google Calendar y Notion",
 };
 
-const THEME_INIT_SCRIPT = `
-(function () {
+function themeInitScript(serverTheme: string | null): string {
+  return `(function () {
   try {
+    var server = ${serverTheme ? `"${serverTheme}"` : "null"};
     var stored = localStorage.getItem("theme");
-    var theme = stored === "dark" || stored === "light"
-      ? stored
-      : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var theme = server || (stored === "dark" || stored === "light" ? stored : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
     if (theme === "dark") document.documentElement.classList.add("dark");
+    localStorage.setItem("theme", theme);
   } catch (e) {}
-})();
-`;
+})();`;
+}
 
 export default async function RootLayout({
   children,
@@ -48,6 +48,16 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  let serverTheme: "light" | "dark" | null = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("theme")
+      .eq("id", user.id)
+      .single<{ theme: "light" | "dark" | null }>();
+    serverTheme = profile?.theme ?? null;
+  }
+
   return (
     <html
       lang="es"
@@ -55,7 +65,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <InlineScript html={THEME_INIT_SCRIPT} />
+        <InlineScript html={themeInitScript(serverTheme)} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <NavBar />
