@@ -4,26 +4,54 @@ import { useEffect, useRef, useState } from "react";
 import { sileo } from "sileo";
 
 interface Suggestion {
-  name: string;
-  admin1?: string;
-  country?: string;
   display: string;
+  type: string;
+}
+
+const COORD_RE = /^(-?\d{1,3}\.?\d*)[,\s]+(-?\d{1,3}\.?\d*)$/;
+
+async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`,
+    { headers: { "User-Agent": "asistences-app/1.0" } }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.display_name ?? null;
 }
 
 async function searchLocations(query: string): Promise<Suggestion[]> {
-  if (query.trim().length < 2) return [];
-  const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
-  url.searchParams.set("name", query);
-  url.searchParams.set("count", "5");
-  url.searchParams.set("language", "es");
-  const res = await fetch(url.toString());
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+
+  // Si el usuario pegó coordenadas, hacer reverse geocoding directo
+  const coordMatch = trimmed.match(COORD_RE);
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1]);
+    const lon = parseFloat(coordMatch[2]);
+    if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      const name = await reverseGeocode(lat, lon).catch(() => null);
+      return name ? [{ display: name, type: "coordinate" }] : [];
+    }
+  }
+
+  // Búsqueda de texto: Nominatim soporta calles, ciudades, POIs
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", trimmed);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "5");
+  url.searchParams.set("accept-language", "es");
+  url.searchParams.set("addressdetails", "0");
+
+  const res = await fetch(url.toString(), {
+    headers: { "User-Agent": "asistences-app/1.0" },
+  });
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.results ?? []).map((r: { name: string; admin1?: string; country?: string }) => ({
-    name: r.name,
-    admin1: r.admin1,
-    country: r.country,
-    display: [r.name, r.admin1, r.country].filter(Boolean).join(", "),
+
+  return (data as { display_name: string; type: string }[]).map((r) => ({
+    display: r.display_name,
+    type: r.type,
   }));
 }
 
@@ -53,7 +81,7 @@ export function LocationField({
       const results = await searchLocations(val).catch(() => []);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
-    }, 350);
+    }, 400);
   }
 
   function selectSuggestion(s: Suggestion) {
@@ -62,7 +90,6 @@ export function LocationField({
     setShowSuggestions(false);
   }
 
-  // Cerrar sugerencias al hacer click fuera
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -85,13 +112,9 @@ export function LocationField({
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          const res = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`
-          );
-          const data = await res.json();
-          const parts = [data.locality, data.principalSubdivision, data.countryName].filter(Boolean);
-          if (parts.length === 0) throw new Error("Sin resultados");
-          onChange(parts.join(", "));
+          const name = await reverseGeocode(latitude, longitude);
+          if (!name) throw new Error("Sin resultados");
+          onChange(name);
         } catch {
           sileo.error({ title: "Error", description: "No se pudo convertir la ubicación, escríbela manualmente." });
         } finally {
@@ -123,7 +146,7 @@ export function LocationField({
           value={value}
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? "Ciudad, calle o coordenadas..."}
           autoComplete="off"
           className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
         />
@@ -138,18 +161,15 @@ export function LocationField({
       </div>
 
       {showSuggestions && suggestions.length > 0 && (
-        <ul className="absolute z-50 mt-1 w-full rounded-md border border-border-soft bg-surface shadow-lg overflow-hidden">
+        <ul className="absolute z-50 mt-1 w-full rounded-md border border-border-soft bg-surface shadow-lg overflow-hidden max-h-52 overflow-y-auto">
           {suggestions.map((s, i) => (
             <li key={i}>
               <button
                 type="button"
                 onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-background transition-colors"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-background transition-colors truncate"
               >
-                <span className="font-medium">{s.name}</span>
-                {(s.admin1 || s.country) && (
-                  <span className="text-muted"> — {[s.admin1, s.country].filter(Boolean).join(", ")}</span>
-                )}
+                {s.display}
               </button>
             </li>
           ))}
