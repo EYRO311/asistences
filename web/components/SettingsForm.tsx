@@ -177,7 +177,7 @@ export function SettingsForm({
   integrations,
 }: {
   profile: Profile;
-  integrations: Pick<Integration, "provider" | "workspace_id" | "metadata">[];
+  integrations: Pick<Integration, "provider" | "workspace_id" | "metadata" | "scope">[];
 }) {
   const router = useRouter();
 
@@ -198,7 +198,9 @@ export function SettingsForm({
 
   const [activeTab, setActiveTab] = useState<"perfil" | "horarios" | "conexiones">("perfil");
 
-  const googleConnected = integrations.some((i) => i.provider === "google");
+  const googleIntegration = integrations.find((i) => i.provider === "google");
+  const googleConnected = Boolean(googleIntegration);
+  const gmailConnected = Boolean(googleIntegration?.scope?.includes("gmail"));
   const notionIntegration = integrations.find((i) => i.provider === "notion");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -445,19 +447,42 @@ export function SettingsForm({
       {/* ══ TAB: CONEXIONES ══ */}
       {activeTab === "conexiones" && (
         <>
-          <div className="flex items-center justify-between rounded-md border border-border-soft px-4 py-3">
-            <div>
-              <p className="font-medium">Google Calendar</p>
-              <p className="text-sm text-muted">
-                {googleConnected ? "Conectado" : "Necesario para crear eventos y calcular días libres"}
-              </p>
+          <div className="rounded-md border border-border-soft px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Google</p>
+                <p className="text-sm text-muted">
+                  {googleConnected
+                    ? "Google Calendar conectado"
+                    : "Necesario para crear eventos y calcular días libres"}
+                </p>
+              </div>
+              <a
+                href="/api/auth/google/connect"
+                className="shrink-0 rounded-md border border-border-soft px-3 py-1.5 text-sm hover:bg-surface"
+              >
+                {googleConnected ? "Reconectar" : "Conectar"}
+              </a>
             </div>
-            <a
-              href="/api/auth/google/connect"
-              className="rounded-md border border-border-soft px-3 py-1.5 text-sm hover:bg-surface"
-            >
-              {googleConnected ? "Reconectar" : "Conectar"}
-            </a>
+
+            {googleConnected && (
+              <div className="flex items-center justify-between pt-1 border-t border-border-soft">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${gmailConnected ? "bg-green-500" : "bg-amber-400"}`} />
+                  <p className="text-sm text-muted">
+                    {gmailConnected ? "Gmail conectado" : "Gmail no habilitado"}
+                  </p>
+                </div>
+                {!gmailConnected && (
+                  <a
+                    href="/api/auth/google/connect"
+                    className="text-xs text-amber-600 dark:text-amber-400 underline hover:no-underline"
+                  >
+                    Reconectar para activar
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between rounded-md border border-border-soft px-4 py-3">

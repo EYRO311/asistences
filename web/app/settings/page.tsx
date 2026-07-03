@@ -24,7 +24,7 @@ export default async function SettingsPage({
 
   const { data: integrations } = await supabase
     .from("integrations")
-    .select("provider, workspace_id, metadata")
+    .select("provider, workspace_id, metadata, scope")
     .eq("user_id", user!.id);
 
   return (
@@ -47,7 +47,7 @@ export default async function SettingsPage({
       {profile && (
         <SettingsForm
           profile={profile}
-          integrations={(integrations ?? []) as Pick<Integration, "provider" | "workspace_id" | "metadata">[]}
+          integrations={(integrations ?? []) as Pick<Integration, "provider" | "workspace_id" | "metadata" | "scope">[]}
         />
       )}
 
