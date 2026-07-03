@@ -68,6 +68,25 @@ function occurrenceToday(item: Item, todayStr: string): Item {
   return { ...item, start_time: start.toISOString(), end_time: end.toISOString() };
 }
 
+// ── Outfit helper ────────────────────────────────────────────────────────────
+
+function pickOutfitItem(todayItems: Item[]): { item: Item; outfitText: string } | null {
+  // Non-routine events take priority over recurring routines
+  const sorted = [
+    ...todayItems.filter((i) => !i.recurrence_days?.length),
+    ...todayItems.filter((i) => i.recurrence_days?.length),
+  ];
+  for (const item of sorted) {
+    const text =
+      item.cached_recommendation?.recommendation ??
+      item.outfit_suggestion ??
+      item.cached_recommendation?.outfit_suggestion ??
+      null;
+    if (text) return { item, outfitText: text };
+  }
+  return null;
+}
+
 // ── Greeting ─────────────────────────────────────────────────────────────────
 
 function greeting(tz: string): string {
@@ -121,6 +140,7 @@ export default async function HomePage() {
 
   const allDayItems = todayItems.filter((i) => i.all_day);
   const timedItems = todayItems.filter((i) => !i.all_day && i.start_time);
+  const outfitCard = pickOutfitItem(todayItems);
 
   // Pending tasks: not done, no specific time today
   const todayIds = new Set(todayItems.map((i) => i.id));
@@ -205,6 +225,19 @@ export default async function HomePage() {
             Ajustes
           </Link>{" "}
           para ver el clima del día.
+        </div>
+      )}
+
+      {/* ── Outfit del día ── */}
+      {outfitCard && (
+        <div className="rounded-xl border border-border-soft bg-surface p-4 flex gap-3">
+          <span className="text-2xl leading-none shrink-0 mt-0.5">👔</span>
+          <div className="min-w-0">
+            <p className="text-xs text-muted mb-1">
+              {firstName ? `Para ti hoy, ${firstName}` : "Para hoy"} · {outfitCard.item.title}
+            </p>
+            <p className="text-sm leading-snug">{outfitCard.outfitText}</p>
+          </div>
         </div>
       )}
 
