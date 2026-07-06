@@ -309,7 +309,7 @@ export async function fetchInboxEmails(
 
     const list = await gmail.users.messages.list({
       userId: "me",
-      labelIds: ["INBOX"],
+      labelIds: ["INBOX", "CATEGORY_PRIMARY"],
       maxResults,
     });
 
@@ -342,7 +342,7 @@ export async function fetchInboxEmails(
       };
     });
   } catch (err) {
-    console.error("[fetchInboxEmails] error:", err instanceof Error ? err.message : err);
+    console.error("[fetchInboxEmails]", err instanceof Error ? err.message : err);
     return [];
   }
 }
