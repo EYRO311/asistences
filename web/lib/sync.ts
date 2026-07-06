@@ -344,7 +344,80 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     errors.push(`Unir duplicados: ${err instanceof Error ? err.message : "error"}`);
   }
 
+  // Limpiar ocurrencias individuales de google_sync que son duplicados de
+  // una rutina existente (creadas antes de que el sync ignorara instancias).
+  try {
+    mergedDuplicates += await cleanupRoutineOccurrenceDuplicates(userId);
+  } catch (err) {
+    errors.push(`Limpiar duplicados de rutina: ${err instanceof Error ? err.message : "error"}`);
+  }
+
   return { importedFromGoogle, importedFromNotion, mergedDuplicates, errors };
+}
+
+/**
+ * Elimina ítems de google_sync que son ocurrencias individuales (por día) de
+ * una serie recurrente que ya existe como rutina en la app (con recurrence_days).
+ *
+ * Antes del fix del sync, cada ocurrencia del RRULE se importaba como un ítem
+ * separado con su propio start_time y google_event_id de instancia. Ahora que
+ * el sync los ignora correctamente, esta función limpia los que ya quedaron.
+ *
+ * Criterio: ítem con source="google_sync", sin recurrence_days, cuyo título +
+ * HH:mm del start_time coincide con alguna rutina existente.
+ */
+async function cleanupRoutineOccurrenceDuplicates(userId: string): Promise<number> {
+  const supabase = createServiceRoleClient();
+
+  const { data: itemsRaw } = await supabase.from("items").select("*").eq("user_id", userId);
+  const items = (itemsRaw ?? []) as Item[];
+
+  // Rutinas existentes: ítems con recurrence_days + recurrence_start_time
+  const routines = items.filter((i) => i.recurrence_days?.length && i.recurrence_start_time);
+  if (routines.length === 0) return 0;
+
+  // Claves "título|HH:mm" de todas las rutinas
+  const routineKeys = new Set(
+    routines.map((r) => `${r.title.trim().toLowerCase()}|${r.recurrence_start_time}`)
+  );
+
+  // Ítems google_sync sin recurrence_days cuyo título+hora coincide con una rutina
+  const toDelete = items.filter((item) => {
+    if (item.source !== "google_sync") return false;
+    if (item.recurrence_days?.length) return false; // ya es una rutina, no tocar
+    if (!item.start_time) return false;
+    const hhmm = extractHHMM(item.start_time);
+    if (!hhmm) return false;
+    return routineKeys.has(`${item.title.trim().toLowerCase()}|${hhmm}`);
+  });
+
+  if (toDelete.length === 0) return 0;
+
+  let count = 0;
+  for (const item of toDelete) {
+    // Archivar la página de Notion asociada (si existe y es distinta a la de la rutina)
+    if (item.notion_page_id) {
+      const matchKey = (() => {
+        const hhmm = extractHHMM(item.start_time!);
+        return hhmm ? `${item.title.trim().toLowerCase()}|${hhmm}` : null;
+      })();
+      const routine = matchKey ? routines.find(
+        (r) => `${r.title.trim().toLowerCase()}|${r.recurrence_start_time}` === matchKey
+      ) : undefined;
+      if (!routine?.notion_page_id || routine.notion_page_id !== item.notion_page_id) {
+        try {
+          const token = await getNotionAccessToken(userId);
+          await archiveItemNotionPage(token, item.notion_page_id);
+        } catch {
+          // Si falla el archivo de Notion, igual borramos el ítem local
+        }
+      }
+    }
+    await supabase.from("items").delete().eq("id", item.id);
+    count++;
+  }
+
+  return count;
 }
 
 /**
