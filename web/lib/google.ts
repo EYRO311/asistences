@@ -341,7 +341,8 @@ export async function fetchInboxEmails(
         unread: labelIds.includes("UNREAD"),
       };
     });
-  } catch {
+  } catch (err) {
+    console.error("[fetchInboxEmails] error:", err instanceof Error ? err.message : err);
     return [];
   }
 }
