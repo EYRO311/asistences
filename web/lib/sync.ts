@@ -150,31 +150,28 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
 
         // Si ya existe en la BD una rutina o un ítem de google_sync con el
         // mismo título y mismo horario (HH:mm), considerarlos la misma serie.
-        // Actualiza el google_event_id al ID maestro si era una instancia antigua.
-        if (!event.allDay) {
-          const eventHHMM = extractHHMM(event.start);
-          if (eventHHMM) {
-            const titleTimeKey = `${event.title.trim().toLowerCase()}|${eventHHMM}`;
-            const masterGoogleId = event.recurringEventId;
+        // Aplica tanto a eventos con hora como a eventos de día completo.
+        const masterGoogleId = event.recurringEventId;
+        const eventHHMM = event.allDay ? null : extractHHMM(event.start);
+        const titleKey = event.title.trim().toLowerCase();
+        const titleTimeKey = eventHHMM ? `${titleKey}|${eventHHMM}` : null;
 
-            const matchingItem =
-              routineByTitleAndTime.get(titleTimeKey) ??
-              googleSyncByTitleAndTime.get(titleTimeKey) ??
-              routineByTitle.get(event.title.trim().toLowerCase());
+        const matchingItem =
+          (titleTimeKey ? (routineByTitleAndTime.get(titleTimeKey) ?? googleSyncByTitleAndTime.get(titleTimeKey)) : null) ??
+          routineByTitle.get(titleKey);
 
-            if (matchingItem) {
-              importedRecurringIds.add(masterGoogleId);
-              // Actualizar al ID maestro si el ítem tiene un ID de instancia o está sin vincular.
-              if (matchingItem.google_event_id !== masterGoogleId) {
-                await supabase.from("items").update({ google_event_id: masterGoogleId }).eq("id", matchingItem.id);
-                knownGoogleIds.add(masterGoogleId);
-              }
-              continue;
-            }
+        if (matchingItem) {
+          importedRecurringIds.add(masterGoogleId);
+          // Actualizar al ID maestro si el ítem tiene un ID de instancia o está sin vincular.
+          if (matchingItem.google_event_id !== masterGoogleId) {
+            await supabase.from("items").update({ google_event_id: masterGoogleId }).eq("id", matchingItem.id);
+            knownGoogleIds.add(masterGoogleId);
           }
+          continue;
         }
 
         importedRecurringIds.add(event.recurringEventId);
+        knownGoogleIds.add(event.recurringEventId);
       }
 
       // Ya existe una tarea con el mismo título y fecha/hora: no duplicar,
@@ -182,11 +179,18 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
       const existingMatch = byDuplicateKey.get(duplicateKey(event.title, event.start) ?? "");
       if (existingMatch) {
         const patch: Record<string, unknown> = {};
-        if (!existingMatch.google_event_id) patch.google_event_id = event.id;
+        // Para eventos recurrentes usar el ID maestro, no el de la instancia
+        const googleIdToStore = event.recurringEventId ?? event.id;
+        if (!existingMatch.google_event_id) patch.google_event_id = googleIdToStore;
         if (!existingMatch.description && event.description) patch.description = event.description;
         if (event.meetLink && !existingMatch.meet_link) patch.meet_link = event.meetLink;
         if (Object.keys(patch).length > 0) {
           await supabase.from("items").update(patch).eq("id", existingMatch.id);
+        }
+        // Marcar la serie como ya procesada para que ocurrencias futuras no creen duplicados
+        if (event.recurringEventId) {
+          importedRecurringIds.add(event.recurringEventId);
+          knownGoogleIds.add(event.recurringEventId);
         }
         continue;
       }
