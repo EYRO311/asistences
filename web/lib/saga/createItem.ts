@@ -79,72 +79,82 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
   }
 
   let googleEventId: string | null = null;
+  let notionPageId: string | null = null;
+  let notionUrl: string | null = null;
+  let outfitSuggestion: string | null = null;
 
   try {
-    // --- Paso 2: crear evento en Google Calendar (si aplica) ---
+    // --- Paso 2: crear evento en Google Calendar (si aplica y si está conectado) ---
     if (shouldUseCalendar) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("timezone")
-        .eq("id", userId)
-        .single<Pick<Profile, "timezone">>();
+      try {
+        const { data: calProfile } = await supabase
+          .from("profiles")
+          .select("timezone")
+          .eq("id", userId)
+          .single<Pick<Profile, "timezone">>();
 
-      const accessToken = await getValidGoogleAccessToken(userId);
+        const accessToken = await getValidGoogleAccessToken(userId);
 
-      googleEventId = await createCalendarEvent(accessToken, {
-        title: item.title,
-        description: item.description ?? undefined,
-        start: item.start_time!,
-        end: item.end_time!,
-        allDay: item.all_day,
-        timeZone: profile?.timezone ?? "America/Mexico_City",
-        recurrenceDays: item.recurrence_days,
-      });
+        googleEventId = await createCalendarEvent(accessToken, {
+          title: item.title,
+          description: item.description ?? undefined,
+          start: item.start_time!,
+          end: item.end_time!,
+          allDay: item.all_day,
+          timeZone: calProfile?.timezone ?? "America/Mexico_City",
+          recurrenceDays: item.recurrence_days,
+        });
 
-      await supabase
-        .from("items")
-        .update({ google_event_id: googleEventId, status: "syncing" })
-        .eq("id", item.id);
+        await supabase
+          .from("items")
+          .update({ google_event_id: googleEventId, status: "syncing" })
+          .eq("id", item.id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        // Si no tiene Google conectado lo saltamos; cualquier otro error sí falla
+        if (!msg.includes("no tiene conectada")) throw err;
+      }
     }
 
-    // --- Paso 3: crear página en Notion ---
-    const { data: profile, error: profileError } = await supabase
+    // --- Paso 3: crear página en Notion (si está configurado y conectado) ---
+    const { data: profile } = await supabase
       .from("profiles")
       .select("notion_database_id, location, full_name, age, gender")
       .eq("id", userId)
       .single<Pick<Profile, "notion_database_id" | "location" | "full_name" | "age" | "gender">>();
 
-    if (profileError || !profile?.notion_database_id) {
-      throw new SagaError(
-        "notion_config",
-        "El usuario no tiene configurada una base de datos de Notion (profiles.notion_database_id)"
-      );
+    if (profile?.notion_database_id) {
+      try {
+        const userProfile = { name: profile.full_name, age: profile.age, gender: profile.gender };
+
+        const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
+          item.location ?? profile.location ?? null,
+          item.start_time
+        ).catch(() => ({ location: item.location ?? profile.location ?? null, weather: null }));
+
+        outfitSuggestion = await suggestOutfitForNotion(
+          item.title, item.description, resolvedLocation, weather, userProfile
+        ).catch(() => null);
+
+        const notionToken = await getNotionAccessToken(userId);
+        const result = await createItemNotionPage(notionToken, profile.notion_database_id, item, {
+          outfitSuggestion,
+        });
+        notionPageId = result.pageId;
+        notionUrl = result.url;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        // Si no tiene Notion conectado lo saltamos; otros errores sí fallan
+        if (!msg.includes("no tiene conectada")) throw err;
+      }
     }
-
-    const userProfile = { name: profile.full_name, age: profile.age, gender: profile.gender };
-
-    // Obtener clima y ubicación para la sugerencia de vestimenta.
-    const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
-      item.location ?? profile.location ?? null,
-      item.start_time
-    ).catch(() => ({ location: item.location ?? profile.location ?? null, weather: null }));
-
-    // Sugerencia con clima: se usa tanto en la app como en Notion.
-    const outfitSuggestion = await suggestOutfitForNotion(
-      item.title, item.description, resolvedLocation, weather, userProfile
-    ).catch(() => null);
-
-    const notionToken = await getNotionAccessToken(userId);
-    const { pageId, url } = await createItemNotionPage(notionToken, profile.notion_database_id, item, {
-      outfitSuggestion,
-    });
 
     // --- Paso 4: confirmar ---
     const { data: confirmedItem, error: confirmError } = await supabase
       .from("items")
       .update({
-        notion_page_id: pageId,
-        notion_url: url,
+        notion_page_id: notionPageId,
+        notion_url: notionUrl,
         google_event_id: googleEventId,
         outfit_suggestion: outfitSuggestion,
         status: "confirmed",

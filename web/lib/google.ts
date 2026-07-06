@@ -309,7 +309,7 @@ export async function fetchInboxEmails(
 
     const list = await gmail.users.messages.list({
       userId: "me",
-      labelIds: ["INBOX", "CATEGORY_PRIMARY"],
+      q: "in:inbox -category:promotions -category:social -category:updates -category:forums",
       maxResults,
     });
 
