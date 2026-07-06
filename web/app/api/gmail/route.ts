@@ -16,7 +16,8 @@ export async function GET() {
     const accessToken = await getValidGoogleAccessToken(user.id);
     const emails = await fetchInboxEmails(accessToken, 8);
     return NextResponse.json({ emails });
-  } catch {
+  } catch (err) {
+    console.error("[gmail] error:", err instanceof Error ? err.message : err);
     return NextResponse.json({ emails: [] });
   }
 }
