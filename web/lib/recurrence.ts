@@ -23,30 +23,28 @@ function isoWeekday(date: Date): number {
  * día. Si no aplica para esa fecha, devuelve null.
  */
 export function occurrenceForDate(item: Item, date: Date): Item | null {
-  if (item.start_time && isSameDay(new Date(item.start_time), date)) {
-    return item;
+  const isRecurring = item.recurrence_days.length > 0 && item.recurrence_start_time && item.recurrence_end_time;
+
+  // Item puntual: solo aparece en su fecha exacta
+  if (!isRecurring) {
+    if (item.start_time && isSameDay(new Date(item.start_time), date)) return item;
+    return null;
   }
 
-  if (
-    item.recurrence_days.length > 0 &&
-    item.recurrence_start_time &&
-    item.recurrence_end_time &&
-    item.start_time &&
-    date >= startOfDay(new Date(item.start_time)) &&
-    item.recurrence_days.includes(isoWeekday(date))
-  ) {
-    const [startHour, startMinute] = item.recurrence_start_time.split(":").map(Number);
-    const [endHour, endMinute] = item.recurrence_end_time.split(":").map(Number);
+  // Rutina recurrente: aparece en los días de la semana configurados.
+  // start_time es opcional; si existe, sirve como fecha mínima desde la cual aplica.
+  const afterStart = !item.start_time || date >= startOfDay(new Date(item.start_time));
+  if (!afterStart || !item.recurrence_days.includes(isoWeekday(date))) return null;
 
-    const start = new Date(date);
-    start.setHours(startHour, startMinute, 0, 0);
-    const end = new Date(date);
-    end.setHours(endHour, endMinute, 0, 0);
+  const [startHour, startMinute] = item.recurrence_start_time!.split(":").map(Number);
+  const [endHour, endMinute] = item.recurrence_end_time!.split(":").map(Number);
 
-    return { ...item, start_time: start.toISOString(), end_time: end.toISOString() };
-  }
+  const start = new Date(date);
+  start.setHours(startHour, startMinute, 0, 0);
+  const end = new Date(date);
+  end.setHours(endHour, endMinute, 0, 0);
 
-  return null;
+  return { ...item, start_time: start.toISOString(), end_time: end.toISOString() };
 }
 
 /**

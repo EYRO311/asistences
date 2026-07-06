@@ -23,16 +23,32 @@ export default async function WeekPage() {
   const rangeStart = addDays(today, -3);
   const rangeEnd = addDays(today, 4); // límite exclusivo
 
-  const { data: items } = await supabase
+  // Eventos puntuales en el rango de la semana
+  const { data: rangeItems } = await supabase
     .from("items")
     .select("*")
     .gte("start_time", rangeStart.toISOString())
     .lt("start_time", rangeEnd.toISOString())
     .order("start_time", { ascending: true, nullsFirst: false });
 
-  const all = (items ?? []) as Item[];
-  const pasadas = all.filter((i) => i.start_time && new Date(i.start_time) < today);
-  const resto = all.filter((i) => !i.start_time || new Date(i.start_time) >= today);
+  // Rutinas recurrentes: se muestran siempre independientemente de start_time
+  const { data: routineItems } = await supabase
+    .from("items")
+    .select("*")
+    .not("recurrence_start_time", "is", null);
+
+  // Merge deduplicando por id (una rutina puede aparecer en ambas queries si se creó esta semana)
+  const seenIds = new Set<string>();
+  const all = [...(rangeItems ?? []), ...(routineItems ?? [])].filter((item) => {
+    if (seenIds.has(item.id)) return false;
+    seenIds.add(item.id);
+    return true;
+  }) as Item[];
+
+  // Rutinas siempre van a "resto" (son permanentes, no "pasadas")
+  const isRoutine = (i: Item) => Boolean(i.recurrence_days?.length && i.recurrence_start_time);
+  const pasadas = all.filter((i) => !isRoutine(i) && i.start_time && new Date(i.start_time) < today);
+  const resto = all.filter((i) => isRoutine(i) || !i.start_time || new Date(i.start_time) >= today);
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 lg:max-w-6xl px-4 py-8 space-y-8">
