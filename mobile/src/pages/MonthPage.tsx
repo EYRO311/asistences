@@ -14,9 +14,9 @@ function toDateParam(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-interface Props { items: Item[]; onSettings: () => void; }
+interface Props { items: Item[]; onSettings: () => void; onSync: () => void; syncing: boolean; pendingCount: number; onItemClick: (item: Item) => void; }
 
-export function MonthPage({ items, onSettings }: Props) {
+export function MonthPage({ items, onSettings, onSync, syncing, pendingCount, onItemClick }: Props) {
   const today = new Date();
   const [monthAnchor, setMonthAnchor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<string | null>(toDateParam(today));
@@ -45,8 +45,8 @@ export function MonthPage({ items, onSettings }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <AppHeader title="" onSettings={onSettings} />
-      <div className="px-4 pb-2 flex items-center gap-2 -mt-2">
+      <AppHeader title="" onSettings={onSettings} onSync={onSync} syncing={syncing} pendingCount={pendingCount} />
+      <div className="px-4 pb-1 flex items-center gap-2 -mt-3">
         <h2 className="font-handwriting text-2xl flex-1 capitalize">
           {new Intl.DateTimeFormat("es-MX", { month: "long" }).format(monthAnchor)}{" "}
           <span className="text-muted">{monthAnchor.getFullYear()}</span>
@@ -75,9 +75,9 @@ export function MonthPage({ items, onSettings }: Props) {
       </div>
 
       {/* Day headers */}
-      <div className="grid grid-cols-7 px-2 mb-1">
+      <div className="grid grid-cols-7 px-2">
         {["L", "M", "X", "J", "V", "S", "D"].map((d, i) => (
-          <div key={i} className="py-1 text-center text-[10px] font-semibold uppercase tracking-wider text-muted">
+          <div key={i} className="py-0.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted">
             {d}
           </div>
         ))}
@@ -98,22 +98,22 @@ export function MonthPage({ items, onSettings }: Props) {
               type="button"
               onClick={() => setSelectedDate(key)}
               className={[
-                "flex flex-col items-center rounded-xl py-1 px-0.5 min-h-10 transition-colors",
+                "flex flex-col items-center rounded-lg py-0.5 px-0 min-h-8 transition-colors",
                 inMonth ? "" : "opacity-20 pointer-events-none",
                 isSelected ? "bg-foreground text-background" : "hover:bg-surface",
               ].join(" ")}
             >
               <span className={[
-                "text-xs leading-none mb-1 w-6 h-6 flex items-center justify-center rounded-full font-medium",
+                "text-[11px] leading-none w-5 h-5 flex items-center justify-center rounded-full font-medium",
                 isToday && !isSelected ? "bg-foreground/10 font-bold" : "",
               ].join(" ")}>
                 {day.getDate()}
               </span>
-              <div className="flex flex-wrap justify-center gap-0.5">
+              <div className="flex justify-center gap-0.5 mt-0.5">
                 {dayItems.slice(0, 3).map((item) => (
                   <span
                     key={item.id}
-                    className={`h-1 w-1 rounded-full ${isSelected ? "bg-background/70" : TYPE_DOT_COLORS[item.type]}`}
+                    className={`h-0.75 w-0.75 rounded-full ${isSelected ? "bg-background/70" : TYPE_DOT_COLORS[item.type]}`}
                   />
                 ))}
               </div>
@@ -134,7 +134,7 @@ export function MonthPage({ items, onSettings }: Props) {
             ) : (
               <div className="space-y-2">
                 {selectedItems.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-border-soft bg-surface p-3 flex items-start gap-2.5">
+                  <button key={item.id} type="button" onClick={() => onItemClick(item)} className="w-full rounded-xl border border-border-soft bg-surface p-3 flex items-start gap-2.5 text-left">
                     <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${TYPE_DOT_COLORS[item.type]}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium leading-snug">{item.title}</p>
@@ -148,7 +148,7 @@ export function MonthPage({ items, onSettings }: Props) {
                     <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${TYPE_BADGE_COLORS[item.type]}`}>
                       {item.type}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}

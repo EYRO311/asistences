@@ -88,7 +88,7 @@ export function SettingsPage({ session, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-border-soft shrink-0">
+      <div className="flex items-center justify-between px-4 border-b border-border-soft shrink-0" style={{ paddingTop: "calc(env(safe-area-inset-top) + 1rem)", paddingBottom: "1rem" }}>
         <h1 className="font-handwriting text-2xl">Ajustes</h1>
         <button type="button" onClick={onClose} className="text-muted hover:text-foreground p-1">
           <IconX size={20} aria-hidden />

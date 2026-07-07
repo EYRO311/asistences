@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { fullSync } from "@/lib/sync";
-import { getAllItems } from "@/db/items";
+import { fullSync, forceSyncAll } from "@/lib/sync";
+import { getAllItems, getPendingCount } from "@/db/items";
 import { Network } from "@capacitor/network";
 import type { Session } from "@supabase/supabase-js";
 import type { Item } from "@/lib/types";
@@ -13,6 +13,7 @@ import { TasksPage } from "@/pages/TasksPage";
 import { NewItemPage } from "@/pages/NewItemPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { BottomNav } from "@/components/BottomNav";
+import { ItemDetailModal } from "@/components/ItemDetailModal";
 
 export type Page = "home" | "week" | "month" | "tasks" | "new";
 
@@ -22,23 +23,30 @@ export default function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [syncing, setSyncing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [showNew, setShowNew] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     getAllItems().then(setItems).catch(console.error);
+    getPendingCount().then(setPendingCount).catch(console.error);
   }, []);
+
+  async function refreshItems() {
+    const [fresh, count] = await Promise.all([getAllItems(), getPendingCount()]);
+    setItems(fresh);
+    setPendingCount(count);
+  }
 
   useEffect(() => {
     if (!session?.user) return;
@@ -49,8 +57,7 @@ export default function App() {
       setSyncing(true);
       try {
         await fullSync(session!.user.id);
-        const fresh = await getAllItems();
-        setItems(fresh);
+        await refreshItems();
       } catch (err) {
         console.error("Sync failed:", err);
       } finally {
@@ -63,8 +70,19 @@ export default function App() {
     return () => { handle.then((h) => h.remove()); };
   }, [session]);
 
-  function refreshItems() {
-    getAllItems().then(setItems).catch(console.error);
+  async function handleManualSync() {
+    if (!session?.user || syncing) return;
+    const status = await Network.getStatus();
+    if (!status.connected) return;
+    setSyncing(true);
+    try {
+      await forceSyncAll(session.user.id);
+      await refreshItems();
+    } catch (err) {
+      console.error("Manual sync failed:", err);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   if (loading) {
@@ -77,7 +95,13 @@ export default function App() {
 
   if (!session) return <LoginPage onLogin={setSession} />;
 
-  const settingsProps = { onSettings: () => setShowSettings(true) };
+  const sharedProps = {
+    onSettings: () => setShowSettings(true),
+    onSync: handleManualSync,
+    syncing,
+    pendingCount,
+    onItemClick: (item: Item) => setSelectedItem(item),
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -87,11 +111,11 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto pb-20">
-        {currentPage === "home" && <HomePage items={items} onRefresh={refreshItems} session={session} {...settingsProps} />}
-        {currentPage === "week" && <WeekPage items={items} {...settingsProps} />}
-        {currentPage === "month" && <MonthPage items={items} {...settingsProps} />}
-        {currentPage === "tasks" && <TasksPage items={items} {...settingsProps} />}
+      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}>
+        {currentPage === "home"  && <HomePage  items={items} onRefresh={refreshItems} session={session} {...sharedProps} />}
+        {currentPage === "week"  && <WeekPage  items={items} {...sharedProps} />}
+        {currentPage === "month" && <MonthPage items={items} {...sharedProps} />}
+        {currentPage === "tasks" && <TasksPage items={items} {...sharedProps} />}
       </main>
 
       <BottomNav
@@ -111,10 +135,11 @@ export default function App() {
       )}
 
       {showSettings && (
-        <SettingsPage
-          session={session}
-          onClose={() => setShowSettings(false)}
-        />
+        <SettingsPage session={session} onClose={() => setShowSettings(false)} />
+      )}
+
+      {selectedItem && (
+        <ItemDetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />
       )}
     </div>
   );

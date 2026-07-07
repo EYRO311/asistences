@@ -3,7 +3,9 @@ import {
   upsertManyItems,
   getPendingSyncQueue,
   clearSyncQueueEntry,
+  getAllItems,
 } from "@/db/items";
+import { getDb } from "@/db/database";
 import type { Item } from "./types";
 
 export async function pullFromSupabase(userId: string): Promise<void> {
@@ -42,5 +44,21 @@ export async function pushToSupabase(): Promise<void> {
 
 export async function fullSync(userId: string): Promise<void> {
   await pushToSupabase();
+  await pullFromSupabase(userId);
+}
+
+// Fuerza el envío de TODOS los items locales a Supabase,
+// borra la cola pendiente y vuelve a jalar desde Supabase.
+export async function forceSyncAll(userId: string): Promise<void> {
+  const items = await getAllItems();
+  if (items.length > 0) {
+    const { error } = await supabase.from("items").upsert(items);
+    if (error) throw error;
+  }
+
+  const db = await getDb();
+  await db.run("DELETE FROM sync_queue");
+  await db.run("UPDATE items SET synced = 1");
+
   await pullFromSupabase(userId);
 }

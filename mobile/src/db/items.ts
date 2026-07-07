@@ -167,3 +167,15 @@ export async function clearSyncQueueEntry(id: string): Promise<void> {
   const db = await getDb();
   await db.run("DELETE FROM sync_queue WHERE id = ?", [id]);
 }
+
+export async function getPendingCount(): Promise<number> {
+  const db = await getDb();
+  const result = await db.query("SELECT COUNT(*) as count FROM sync_queue");
+  return (result.values?.[0]?.count as number) ?? 0;
+}
+
+export async function getUnsyncedItems(): Promise<string[]> {
+  const db = await getDb();
+  const result = await db.query("SELECT id FROM items WHERE synced = 0 AND pending_delete = 0");
+  return (result.values ?? []).map((r) => r.id as string);
+}

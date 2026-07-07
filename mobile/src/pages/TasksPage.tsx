@@ -13,7 +13,7 @@ function startOfWeek(d: Date) {
   return r;
 }
 
-function Section({ title, items, defaultOpen = false }: { title: string; items: Item[]; defaultOpen?: boolean }) {
+function Section({ title, items, defaultOpen = false, onItemClick }: { title: string; items: Item[]; defaultOpen?: boolean; onItemClick: (item: Item) => void }) {
   const [open, setOpen] = useState(defaultOpen);
   if (items.length === 0) return null;
 
@@ -32,16 +32,16 @@ function Section({ title, items, defaultOpen = false }: { title: string; items: 
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-2 border-t border-border-soft pt-2">
-          {items.map((item) => <ItemCard key={item.id} item={item} />)}
+          {items.map((item) => <ItemCard key={item.id} item={item} onClick={() => onItemClick(item)} />)}
         </div>
       )}
     </div>
   );
 }
 
-interface Props { items: Item[]; onSettings: () => void; }
+interface Props { items: Item[]; onSettings: () => void; onSync: () => void; syncing: boolean; pendingCount: number; onItemClick: (item: Item) => void; }
 
-export function TasksPage({ items, onSettings }: Props) {
+export function TasksPage({ items, onSettings, onSync, syncing, pendingCount, onItemClick }: Props) {
   const today = startOfDay(new Date());
   const tomorrow = addDays(today, 1);
   const weekEnd = addDays(startOfWeek(today), 7);
@@ -60,11 +60,11 @@ export function TasksPage({ items, onSettings }: Props) {
 
   return (
     <div className="px-4 pb-4">
-      <AppHeader title="Mis tareas" onSettings={onSettings} />
+      <AppHeader title="Mis tareas" onSettings={onSettings} onSync={onSync} syncing={syncing} pendingCount={pendingCount} />
 
       <div className="space-y-2 mt-2">
-        <Section title="Rutinas" items={rutinas} defaultOpen />
-        <Section title="Hoy" items={hoy} defaultOpen />
+        <Section title="Rutinas" items={rutinas} defaultOpen onItemClick={onItemClick} />
+        <Section title="Hoy" items={hoy} defaultOpen onItemClick={onItemClick} />
 
         {(pronto.length + estaSemana.length + despues.length) > 0 && (
           <div className="rounded-2xl border border-border-soft overflow-hidden">
@@ -75,27 +75,27 @@ export function TasksPage({ items, onSettings }: Props) {
               {pronto.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1.5 px-1">Pronto</p>
-                  <div className="space-y-1.5">{pronto.map((i) => <ItemCard key={i.id} item={i} />)}</div>
+                  <div className="space-y-1.5">{pronto.map((i) => <ItemCard key={i.id} item={i} onClick={() => onItemClick(i)} />)}</div>
                 </div>
               )}
               {estaSemana.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1.5 px-1">Esta semana</p>
-                  <div className="space-y-1.5">{estaSemana.map((i) => <ItemCard key={i.id} item={i} />)}</div>
+                  <div className="space-y-1.5">{estaSemana.map((i) => <ItemCard key={i.id} item={i} onClick={() => onItemClick(i)} />)}</div>
                 </div>
               )}
               {despues.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1.5 px-1">Después</p>
-                  <div className="space-y-1.5">{despues.map((i) => <ItemCard key={i.id} item={i} />)}</div>
+                  <div className="space-y-1.5">{despues.map((i) => <ItemCard key={i.id} item={i} onClick={() => onItemClick(i)} />)}</div>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        <Section title="Pasadas" items={pasadas} />
-        <Section title="Sin fecha" items={sinFecha} />
+        <Section title="Pasadas" items={pasadas} onItemClick={onItemClick} />
+        <Section title="Sin fecha" items={sinFecha} onItemClick={onItemClick} />
       </div>
     </div>
   );
