@@ -101,9 +101,11 @@ function TravelBlock({
 function RecommendationsInline({
   itemId,
   initial,
+  onLoad,
 }: {
   itemId: string;
   initial: CachedRecommendation | null;
+  onLoad?: (data: CachedRecommendation) => void;
 }) {
   const [data, setData] = useState<CachedRecommendation | null>(initial);
   const [loading, setLoading] = useState(false);
@@ -122,6 +124,7 @@ function RecommendationsInline({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Error");
       setData(json);
+      onLoad?.(json);
       setSelectedTransport(json.preferredTransport ?? transport ?? null);
     } catch (e) {
       sileo.error({
@@ -237,6 +240,8 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
   const effortLabel = EFFORT_OPTIONS.find((e) => e.value === item.effort)?.label;
   const taskStatusLabel = TASK_STATUS_OPTIONS.find((s) => s.value === item.task_status)?.label;
 
+  const [recData, setRecData] = useState<CachedRecommendation | null>(item.cached_recommendation ?? null);
+
   const hasKeypoints =
     taskStatusLabel || priorityLabel || effortLabel || item.categories?.length > 0 || item.outfit_suggestion || item.meet_link;
 
@@ -331,12 +336,42 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               </div>
             )}
 
-            {/* Outfit */}
-            {item.outfit_suggestion && (
-              <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
-                <IconShirt size={12} className="shrink-0 mt-0.5" aria-hidden />
-                <span>{item.outfit_suggestion}</span>
+            {/* Cuando hay recomendaciones: transporte, ubicación y clima compactos */}
+            {recData ? (
+              <div className="space-y-2">
+                {recData.preferredTransport && (
+                  <div className="flex items-center gap-1 text-[11px] text-muted">
+                    {(() => {
+                      const opt = TRANSPORT_OPTIONS.find((o) => o.value === recData.preferredTransport);
+                      return opt ? <><opt.Icon size={12} aria-hidden /> {opt.label}</> : null;
+                    })()}
+                  </div>
+                )}
+                {recData.location && (
+                  <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
+                    <IconMapPin size={11} className="shrink-0 mt-0.5" aria-hidden />
+                    <span>{recData.location}</span>
+                  </div>
+                )}
+                {recData.weather && (
+                  <div className="flex items-start gap-1 text-[11px] text-muted leading-snug font-handwriting">
+                    <IconSunHigh size={11} className="shrink-0 mt-0.5" aria-hidden />
+                    <span>
+                      {recData.weather.description},{" "}
+                      {Math.round(recData.weather.tempMinC)}°–{Math.round(recData.weather.tempMaxC)}°C,{" "}
+                      {recData.weather.precipitationProbability}% lluvia
+                    </span>
+                  </div>
+                )}
               </div>
+            ) : (
+              /* Sin recomendaciones: mostrar outfit guardado */
+              item.outfit_suggestion && (
+                <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
+                  <IconShirt size={12} className="shrink-0 mt-0.5" aria-hidden />
+                  <span>{item.outfit_suggestion}</span>
+                </div>
+              )
             )}
 
             {/* Meet link */}
@@ -387,6 +422,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               <RecommendationsInline
                 itemId={item.id}
                 initial={item.cached_recommendation ?? null}
+                onLoad={setRecData}
               />
             </div>
           </div>
