@@ -3,8 +3,11 @@ import { supabase } from "@/lib/supabase";
 import { fullSync, forceSyncAll } from "@/lib/sync";
 import { getAllItems, getPendingCount } from "@/db/items";
 import { Network } from "@capacitor/network";
+import { App as CapApp } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import type { Session } from "@supabase/supabase-js";
 import type { Item } from "@/lib/types";
+import { setDisplayTimezone } from "@/lib/timezone";
 import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
 import { WeekPage } from "@/pages/WeekPage";
@@ -27,14 +30,52 @@ export default function App() {
   const [showNew, setShowNew] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [integrationToast, setIntegrationToast] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      // Load user timezone from profile so all time formatters use it
+      if (data.session?.user) {
+        supabase
+          .from("profiles")
+          .select("timezone")
+          .eq("id", data.session.user.id)
+          .single()
+          .then(({ data: p }) => { if (p?.timezone) setDisplayTimezone(p.timezone); });
+      }
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
-    return () => listener.subscription.unsubscribe();
+    // Handle OAuth deep link callbacks (com.eyro.agenda://auth/*/success|error)
+    const deepLinkHandle = CapApp.addListener("appUrlOpen", async (data) => {
+      const url = data.url;
+      if (!url.startsWith("com.eyro.agenda://auth/")) return;
+      await Browser.close().catch(() => {});
+      if (url.includes("/success")) {
+        const provider = url.includes("/google/") ? "Google Calendar" : "Notion";
+        setIntegrationToast(`${provider} conectado`);
+        setTimeout(() => setIntegrationToast(null), 3000);
+      } else {
+        setIntegrationToast("Error al conectar. Intenta de nuevo.");
+        setTimeout(() => setIntegrationToast(null), 3500);
+      }
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s?.user) {
+        supabase
+          .from("profiles")
+          .select("timezone")
+          .eq("id", s.user.id)
+          .single()
+          .then(({ data: p }) => { if (p?.timezone) setDisplayTimezone(p.timezone); });
+      }
+    });
+    return () => {
+      listener.subscription.unsubscribe();
+      deepLinkHandle.then((h) => h.remove());
+    };
   }, []);
 
   useEffect(() => {
@@ -140,6 +181,14 @@ export default function App() {
 
       {selectedItem && (
         <ItemDetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />
+      )}
+
+      {integrationToast && (
+        <div className="fixed bottom-24 inset-x-4 z-50 flex justify-center pointer-events-none">
+          <div className="rounded-xl bg-foreground text-background px-4 py-3 text-sm font-medium shadow-lg">
+            {integrationToast}
+          </div>
+        </div>
       )}
     </div>
   );

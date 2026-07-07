@@ -9,12 +9,21 @@ import { getGoogleOAuthClient } from "@/lib/google";
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
-  const userId = searchParams.get("state");
   const error = searchParams.get("error");
+
+  const rawState = searchParams.get("state") ?? "";
+  const stateParts = rawState.split(":");
+  const isMobile = stateParts[stateParts.length - 1] === "mobile";
+  const resolvedUserId = isMobile ? stateParts.slice(0, -1).join(":") : rawState;
+
+  function mobileDeepLink(result: "success" | "error") {
+    return `com.eyro.agenda://auth/google/${result}`;
+  }
 
   const redirectUrl = new URL("/settings", request.url);
 
-  if (error || !code || !userId) {
+  if (error || !code || !resolvedUserId) {
+    if (isMobile) return NextResponse.redirect(mobileDeepLink("error"));
     redirectUrl.searchParams.set("google", "error");
     return NextResponse.redirect(redirectUrl);
   }
@@ -31,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     await supabase.from("integrations").upsert(
       {
-        user_id: userId,
+        user_id: resolvedUserId,
         provider: "google",
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token ?? undefined,
@@ -41,9 +50,11 @@ export async function GET(request: NextRequest) {
       { onConflict: "user_id,provider", ignoreDuplicates: false }
     );
 
+    if (isMobile) return NextResponse.redirect(mobileDeepLink("success"));
     redirectUrl.searchParams.set("google", "connected");
     return NextResponse.redirect(redirectUrl);
   } catch {
+    if (isMobile) return NextResponse.redirect(mobileDeepLink("error"));
     redirectUrl.searchParams.set("google", "error");
     return NextResponse.redirect(redirectUrl);
   }

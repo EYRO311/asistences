@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { Browser } from "@capacitor/browser";
 import type { Session } from "@supabase/supabase-js";
 import type { PreferredTransport } from "@/lib/types";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
-import { IconX, IconSun, IconMoon, IconDeviceLaptop } from "@tabler/icons-react";
+import { getIntegrations, disconnectIntegration, type Integration } from "@/lib/integrations";
+import { IconX, IconSun, IconMoon, IconDeviceLaptop, IconCalendar, IconBrandNotion, IconCheck, IconUnlink } from "@tabler/icons-react";
+
+const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
 
 type Theme = "light" | "dark" | "system";
 
@@ -37,6 +41,8 @@ export function SettingsPage({ session, onClose }: Props) {
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("theme") as Theme) ?? "system");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -52,7 +58,30 @@ export function SettingsPage({ session, onClose }: Props) {
         setWakeTime(data.wake_time ?? "07:00");
         setSleepTime(data.sleep_time ?? "23:00");
       });
+    getIntegrations(session.user.id).then(setIntegrations);
   }, [session.user.id]);
+
+  async function refreshIntegrations() {
+    const updated = await getIntegrations(session.user.id);
+    setIntegrations(updated);
+  }
+
+  async function handleConnect(provider: "google" | "notion") {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    setConnectingProvider(provider);
+    const path = provider === "google" ? "google/connect" : "notion/connect";
+    await Browser.open({ url: `${WEB_URL}/api/auth/${path}?mt=${encodeURIComponent(token)}` });
+    // Refresh after browser closes (deep link handler in App.tsx also triggers a toast)
+    await refreshIntegrations();
+    setConnectingProvider(null);
+  }
+
+  async function handleDisconnect(provider: "google" | "notion") {
+    await disconnectIntegration(session.user.id, provider);
+    await refreshIntegrations();
+  }
 
   function handleThemeChange(t: Theme) {
     setTheme(t);
@@ -195,6 +224,57 @@ export function SettingsPage({ session, onClose }: Props) {
                 className="w-full rounded-xl border border-border-soft bg-surface px-3 py-2.5 text-sm"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Integraciones */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+            Integraciones
+          </label>
+          <div className="space-y-2">
+            {[
+              { provider: "google" as const, label: "Google Calendar", Icon: IconCalendar },
+              { provider: "notion" as const, label: "Notion", Icon: IconBrandNotion },
+            ].map(({ provider, label, Icon }) => {
+              const integration = integrations.find((i) => i.provider === provider);
+              const connected = integration?.connected ?? false;
+              const isConnecting = connectingProvider === provider;
+              return (
+                <div key={provider} className="flex items-center gap-3 rounded-xl border border-border-soft bg-surface px-4 py-3">
+                  <Icon size={18} stroke={1.5} className="shrink-0 text-muted" aria-hidden />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{label}</p>
+                    {connected && provider === "notion" && integration?.workspace_name && (
+                      <p className="text-xs text-muted truncate">{integration.workspace_name}</p>
+                    )}
+                    {connected && (
+                      <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <IconCheck size={11} stroke={2.5} aria-hidden /> Conectado
+                      </p>
+                    )}
+                  </div>
+                  {connected ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDisconnect(provider)}
+                      className="shrink-0 flex items-center gap-1 rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
+                    >
+                      <IconUnlink size={12} stroke={1.5} aria-hidden /> Desconectar
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleConnect(provider)}
+                      disabled={isConnecting}
+                      className="shrink-0 rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40"
+                    >
+                      {isConnecting ? "..." : "Conectar"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
