@@ -23,7 +23,6 @@ import {
   IconCompass,
   IconMapPin,
   IconSunHigh,
-  IconShirt,
   IconVideo,
   IconSparkles,
   IconRefresh,
@@ -141,13 +140,12 @@ function RecommendationsInline({
     }
   }
 
-  // Auto-reload when transport changes from the dropdown (only if data already loaded)
   useEffect(() => {
     if (prevTransport.current !== selectedTransport) {
       prevTransport.current = selectedTransport;
       if (data) load(true, selectedTransport);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTransport]);
 
   if (!data && !loading) {
@@ -184,21 +182,6 @@ function RecommendationsInline({
         </button>
       </div>
 
-      {data.location && (
-        <p className="flex items-center gap-1 text-sm text-muted">
-          <IconMapPin size={13} aria-hidden />
-          {data.location}
-        </p>
-      )}
-
-      {data.weather && (
-        <p className="flex items-center gap-1 font-handwriting text-base text-muted">
-          <IconSunHigh size={13} aria-hidden />
-          {data.weather.description}, {Math.round(data.weather.tempMinC)}°–
-          {Math.round(data.weather.tempMaxC)}°C, {data.weather.precipitationProbability}% lluvia
-        </p>
-      )}
-
       {data.travel && <TravelBlock travel={data.travel} selected={selectedTransport} />}
 
       {(data.recommendation ?? data.outfit_suggestion) && (
@@ -210,31 +193,157 @@ function RecommendationsInline({
   );
 }
 
-// ── Main modal ────────────────────────────────────────────────────────────────
+// ── Keypoints panel content ───────────────────────────────────────────────────
 
-export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => void }) {
+function KeypointsPanel({
+  item,
+  recData,
+  selectedTransport,
+  onTransportChange,
+}: {
+  item: Item;
+  recData: CachedRecommendation | null;
+  selectedTransport: PreferredTransport | null;
+  onTransportChange: (t: PreferredTransport | null) => void;
+}) {
   const priorityLabel = PRIORITY_OPTIONS.find((p) => p.value === item.priority)?.label;
   const effortLabel = EFFORT_OPTIONS.find((e) => e.value === item.effort)?.label;
   const taskStatusLabel = TASK_STATUS_OPTIONS.find((s) => s.value === item.task_status)?.label;
+  const activeTransportOpt = TRANSPORT_OPTIONS.find((o) => o.value === selectedTransport);
 
+  return (
+    <div className="flex flex-col gap-3 p-3">
+      {/* Status / priority / effort */}
+      {(taskStatusLabel || priorityLabel || effortLabel) && (
+        <div className="flex flex-wrap gap-1 md:flex-col md:gap-1">
+          {taskStatusLabel && (
+            <span className="rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center">
+              {taskStatusLabel}
+            </span>
+          )}
+          {priorityLabel && (
+            <span className="rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center">
+              {priorityLabel} prioridad
+            </span>
+          )}
+          {effortLabel && (
+            <span className="rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center">
+              {effortLabel} esfuerzo
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Categories */}
+      {item.categories?.length > 0 && (
+        <div className="flex flex-wrap gap-1 md:flex-col md:gap-1">
+          {item.categories.map((c) => (
+            <span
+              key={c}
+              className="rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center"
+            >
+              {c}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Transport dropdown */}
+      <div className="space-y-1">
+        <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Transporte</p>
+        <div className="relative">
+          {activeTransportOpt && (
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2">
+              <activeTransportOpt.Icon size={11} aria-hidden />
+            </span>
+          )}
+          <select
+            value={selectedTransport ?? ""}
+            onChange={(e) => onTransportChange((e.target.value as PreferredTransport) || null)}
+            className="w-full appearance-none rounded border border-border-soft bg-transparent py-1 pr-5 text-[11px] text-foreground/80 cursor-pointer focus:outline-none focus:border-foreground/40"
+            style={{ paddingLeft: activeTransportOpt ? "1.5rem" : "0.375rem" }}
+          >
+            <option value="">Seleccionar</option>
+            {TRANSPORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown
+            size={10}
+            className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-muted"
+            aria-hidden
+          />
+        </div>
+      </div>
+
+      {/* Location + weather (compact, once recommendations load) */}
+      {recData && (
+        <div className="flex flex-col gap-2">
+          {recData.location && (
+            <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
+              <IconMapPin size={11} className="shrink-0 mt-0.5" aria-hidden />
+              <span>{recData.location}</span>
+            </div>
+          )}
+          {recData.weather && (
+            <div className="flex items-start gap-1 text-[11px] text-muted leading-snug font-handwriting">
+              <IconSunHigh size={11} className="shrink-0 mt-0.5" aria-hidden />
+              <span>
+                {recData.weather.description},{" "}
+                {Math.round(recData.weather.tempMinC)}°–{Math.round(recData.weather.tempMaxC)}°C,{" "}
+                {recData.weather.precipitationProbability}% lluvia
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Meet link */}
+      {item.meet_link && (
+        <a
+          href={item.meet_link}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 text-[11px] text-muted hover:text-foreground underline leading-snug"
+        >
+          <IconVideo size={12} aria-hidden />
+          Videollamada
+        </a>
+      )}
+    </div>
+  );
+}
+
+// ── Main modal ────────────────────────────────────────────────────────────────
+
+export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => void }) {
   const [recData, setRecData] = useState<CachedRecommendation | null>(item.cached_recommendation ?? null);
   const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(
     item.cached_recommendation?.preferredTransport ?? null
   );
-
-  const activeTransportOpt = TRANSPORT_OPTIONS.find((o) => o.value === selectedTransport);
+  const [keypointsOpen, setKeypointsOpen] = useState(false);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center md:items-center bg-black/60 px-0 md:px-4"
-      onClick={onClose}
-    >
+    <>
+      {/* Desktop backdrop */}
       <div
-        className="w-full md:max-w-2xl flex flex-col rounded-t-2xl md:rounded-2xl border border-border-soft bg-surface shadow-xl overflow-hidden"
-        style={{ maxHeight: "92vh" }}
+        className="hidden md:block fixed inset-0 z-50 bg-black/60"
+        onClick={onClose}
+        aria-hidden
+      />
+
+      {/* Modal */}
+      <div
+        className="
+          fixed inset-0 z-50 flex flex-col bg-surface border-border-soft overflow-hidden
+          md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2
+          md:w-full md:max-w-2xl md:max-h-[92vh] md:rounded-2xl md:border md:shadow-xl
+        "
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── HEADER: Topic | Date ── */}
+        {/* ── HEADER: static on all sizes ── */}
         <div className="flex shrink-0 border-b border-border-soft">
           <div className="flex-1 min-w-0 px-4 pt-3 pb-3 border-r border-border-soft">
             <p className="text-[9px] font-semibold text-muted uppercase tracking-widest mb-1.5">
@@ -249,7 +358,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               <h2 className="font-handwriting text-2xl leading-tight">{item.title}</h2>
             </div>
           </div>
-
           <div className="w-36 md:w-44 shrink-0 px-4 pt-3 pb-3">
             <div className="flex items-start justify-between mb-1.5">
               <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Date</p>
@@ -266,123 +374,51 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
           </div>
         </div>
 
-        {/* ── BODY: Questions/Keypoints | Notes ── */}
-        <div className="flex flex-1 min-h-0" style={{ minHeight: 260 }}>
-          {/* Left column — Questions / keypoints */}
-          <div className="w-32 md:w-40 shrink-0 border-r border-border-soft overflow-y-auto p-3 space-y-3">
-            <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">
+        {/* ── MOBILE: collapsible keypoints toggle ── */}
+        <button
+          type="button"
+          className="md:hidden flex items-center justify-between shrink-0 w-full px-4 py-2.5 border-b border-border-soft"
+          onClick={() => setKeypointsOpen((v) => !v)}
+        >
+          <span className="text-[9px] font-semibold text-muted uppercase tracking-widest">
+            Questions / Keypoints
+          </span>
+          <IconChevronDown
+            size={13}
+            className={`text-muted transition-transform duration-200 ${keypointsOpen ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+
+        {/* ── BODY ── */}
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+
+          {/* Left column: collapsible on mobile, always visible on desktop */}
+          <div
+            className={`
+              md:flex flex-col shrink-0
+              w-full md:w-40
+              overflow-y-auto
+              border-b md:border-b-0 md:border-r border-border-soft
+              ${keypointsOpen ? "flex" : "hidden"}
+              md:max-h-full
+            `}
+            style={keypointsOpen ? { maxHeight: "42vh" } : undefined}
+          >
+            <p className="hidden md:block text-[9px] font-semibold text-muted uppercase tracking-widest px-3 pt-3 pb-0">
               Questions / keypoints
             </p>
-
-            {/* Status / priority / effort */}
-            {(taskStatusLabel || priorityLabel || effortLabel) && (
-              <div className="space-y-1">
-                {taskStatusLabel && (
-                  <span className="block rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center">
-                    {taskStatusLabel}
-                  </span>
-                )}
-                {priorityLabel && (
-                  <span className="block rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center">
-                    {priorityLabel} prioridad
-                  </span>
-                )}
-                {effortLabel && (
-                  <span className="block rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center">
-                    {effortLabel} esfuerzo
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Categories */}
-            {item.categories?.length > 0 && (
-              <div className="space-y-1">
-                {item.categories.map((c) => (
-                  <span
-                    key={c}
-                    className="block rounded border border-border-soft px-1.5 py-0.5 text-[11px] text-center"
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Transport dropdown */}
-            <div className="space-y-1">
-              <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">
-                Transporte
-              </p>
-              <div className="relative">
-                {/* Icon overlay */}
-                {activeTransportOpt && (
-                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2">
-                    <activeTransportOpt.Icon size={11} aria-hidden />
-                  </span>
-                )}
-                <select
-                  value={selectedTransport ?? ""}
-                  onChange={(e) =>
-                    setSelectedTransport((e.target.value as PreferredTransport) || null)
-                  }
-                  className="w-full appearance-none rounded border border-border-soft bg-transparent py-1 pr-5 text-[11px] text-foreground/80 cursor-pointer focus:outline-none focus:border-foreground/40"
-                  style={{ paddingLeft: activeTransportOpt ? "1.5rem" : "0.375rem" }}
-                >
-                  <option value="">Seleccionar</option>
-                  {TRANSPORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <IconChevronDown
-                  size={10}
-                  className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-muted"
-                  aria-hidden
-                />
-              </div>
-            </div>
-
-            {/* Location + weather (compact, shown once recommendations load) */}
-            {recData && (
-              <div className="space-y-2">
-                {recData.location && (
-                  <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
-                    <IconMapPin size={11} className="shrink-0 mt-0.5" aria-hidden />
-                    <span>{recData.location}</span>
-                  </div>
-                )}
-                {recData.weather && (
-                  <div className="flex items-start gap-1 text-[11px] text-muted leading-snug font-handwriting">
-                    <IconSunHigh size={11} className="shrink-0 mt-0.5" aria-hidden />
-                    <span>
-                      {recData.weather.description},{" "}
-                      {Math.round(recData.weather.tempMinC)}°–{Math.round(recData.weather.tempMaxC)}°C,{" "}
-                      {recData.weather.precipitationProbability}% lluvia
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Meet link */}
-            {item.meet_link && (
-              <a
-                href={item.meet_link}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-[11px] text-muted hover:text-foreground underline leading-snug"
-              >
-                <IconVideo size={12} aria-hidden />
-                Videollamada
-              </a>
-            )}
+            <KeypointsPanel
+              item={item}
+              recData={recData}
+              selectedTransport={selectedTransport}
+              onTransportChange={setSelectedTransport}
+            />
           </div>
 
-          {/* Right column — Notes (lined paper) */}
+          {/* Right column: Notes */}
           <div
-            className="flex-1 min-w-0 overflow-y-auto p-4 space-y-3"
+            className="flex-1 min-h-0 min-w-0 overflow-y-auto p-4 space-y-3"
             style={{
               backgroundImage:
                 "repeating-linear-gradient(to bottom, transparent 0px, transparent 27px, rgba(128,128,128,0.1) 27px, rgba(128,128,128,0.1) 28px)",
@@ -418,7 +454,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
           </div>
         </div>
 
-        {/* ── FOOTER: Summary ── */}
+        {/* ── FOOTER: static on all sizes ── */}
         <div className="shrink-0 border-t border-border-soft px-4 py-3">
           <p className="text-[9px] font-semibold text-muted uppercase tracking-widest mb-1.5">
             Summary
@@ -447,6 +483,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
