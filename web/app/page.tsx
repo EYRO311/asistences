@@ -79,6 +79,40 @@ function occurrenceToday(item: Item, todayStr: string): Item {
   return { ...item, start_time: start.toISOString(), end_time: end.toISOString() };
 }
 
+// ── Free slots helper ────────────────────────────────────────────────────────
+
+function fmtMinutes(min: number) {
+  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+}
+
+function computeTodayFreeSlots(
+  timedItems: Item[],
+  wakeTime: string,
+  sleepTime: string,
+): { from: string; to: string }[] {
+  const [wh, wm] = wakeTime.split(":").map(Number);
+  const [sh, sm] = sleepTime.split(":").map(Number);
+  const workStart = wh * 60 + wm;
+  const workEnd = sh * 60 + sm;
+
+  const busy = timedItems
+    .map((i) => {
+      const s = new Date(i.start_time!);
+      const e = i.end_time ? new Date(i.end_time) : new Date(s.getTime() + 60 * 60 * 1000);
+      return { from: s.getHours() * 60 + s.getMinutes(), to: e.getHours() * 60 + e.getMinutes() };
+    })
+    .sort((a, b) => a.from - b.from);
+
+  const slots: { from: string; to: string }[] = [];
+  let cursor = workStart;
+  for (const ev of busy) {
+    if (ev.from > cursor + 29) slots.push({ from: fmtMinutes(cursor), to: fmtMinutes(ev.from) });
+    cursor = Math.max(cursor, ev.to);
+  }
+  if (cursor + 29 < workEnd) slots.push({ from: fmtMinutes(cursor), to: fmtMinutes(workEnd) });
+  return slots;
+}
+
 // ── Outfit helper ────────────────────────────────────────────────────────────
 
 function pickOutfitItem(todayItems: Item[]): { item: Item; outfitText: string } | null {
@@ -123,11 +157,11 @@ export default async function HomePage() {
 
   const { data: profileRaw } = await service
     .from("profiles")
-    .select("full_name, location, timezone")
+    .select("full_name, location, timezone, wake_time, sleep_time")
     .eq("id", user.id)
-    .single<Pick<Profile, "full_name" | "location" | "timezone">>();
+    .single<Pick<Profile, "full_name" | "location" | "timezone" | "wake_time" | "sleep_time">>();
 
-  const profile = profileRaw ?? { full_name: null, location: null, timezone: "America/Mexico_City" };
+  const profile = profileRaw ?? { full_name: null, location: null, timezone: "America/Mexico_City", wake_time: "06:00", sleep_time: "23:00" };
   const tz = profile.timezone ?? "America/Mexico_City";
   const today = todayString(tz);
   const weekday = todayISOWeekday(today);
@@ -152,6 +186,11 @@ export default async function HomePage() {
   const allDayItems = todayItems.filter((i) => i.all_day);
   const timedItems = todayItems.filter((i) => !i.all_day && i.start_time);
   const outfitCard = pickOutfitItem(todayItems);
+  const freeSlots = computeTodayFreeSlots(
+    timedItems,
+    profile.wake_time ?? "06:00",
+    profile.sleep_time ?? "23:00",
+  );
 
   // Pending tasks: not done, no specific time today
   const todayIds = new Set(todayItems.map((i) => i.id));
@@ -250,6 +289,35 @@ export default async function HomePage() {
             <p className="text-sm leading-snug">{outfitCard.outfitText}</p>
           </div>
         </div>
+      )}
+
+      {/* ── Tiempo libre hoy ── */}
+      {freeSlots.length > 0 && (
+        <details className="rounded-xl border border-border-soft bg-surface group">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
+            <span className="font-medium text-sm">Tiempo libre hoy</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted">
+                {freeSlots.length} bloque{freeSlots.length !== 1 ? "s" : ""}
+              </span>
+              <svg
+                className="h-4 w-4 text-muted transition-transform group-open:rotate-180"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </summary>
+          <div className="border-t border-border-soft px-4 pt-2 pb-3 space-y-1.5">
+            {freeSlots.map((slot, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted/40 shrink-0" />
+                <span className="text-sm text-muted">{slot.from} – {slot.to}</span>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {/* ── Agenda hoy ── */}
