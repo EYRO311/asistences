@@ -9,6 +9,7 @@ import {
   FREE_DAY_DOT_COLOR,
   FREE_DAY_TEXT_COLORS,
 } from "@/lib/itemPresentation";
+import { IconChevronDown } from "@tabler/icons-react";
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -77,6 +78,7 @@ export function FreeSlots() {
   const [slots, setSlots] = useState<FreeSlot[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const today = startOfDay(new Date());
@@ -117,7 +119,31 @@ export function FreeSlots() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-4 text-xs text-muted">
+      {/* Toggle — solo visible en móvil */}
+      <button
+        type="button"
+        className="sm:hidden flex items-center gap-2 mb-2 text-sm text-muted hover:text-foreground"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5">
+            <span className={`inline-block h-2 w-2 rounded-full ${FREE_DAY_DOT_COLOR}`} />
+            Libre
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className={`inline-block h-2 w-2 rounded-full ${BUSY_DOT_COLOR}`} />
+            Ocupado
+          </span>
+        </span>
+        <IconChevronDown
+          size={14}
+          className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          aria-hidden
+        />
+      </button>
+
+      {/* Leyenda — solo en desktop */}
+      <div className="hidden sm:flex mb-2 items-center gap-4 text-xs text-muted">
         <span className="flex items-center gap-1.5">
           <span className={`inline-block h-2 w-2 rounded-full ${FREE_DAY_DOT_COLOR}`} />
           Libre
@@ -128,7 +154,8 @@ export function FreeSlots() {
         </span>
       </div>
 
-      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-7">
+      {/* Cards: colapsadas en móvil, siempre visibles en desktop */}
+      <ul className={`grid gap-2 sm:grid-cols-7 ${open ? "grid-cols-1" : "hidden sm:grid"}`}>
         {slots.map((day) => {
           const isToday = isSameUtcDate(day.date, today);
           const segments = day.free ? [] : buildDaySegments(day);
