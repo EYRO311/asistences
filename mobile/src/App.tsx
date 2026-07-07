@@ -7,6 +7,10 @@ import type { Session } from "@supabase/supabase-js";
 import type { Item } from "@/lib/types";
 import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
+import { WeekPage } from "@/pages/WeekPage";
+import { MonthPage } from "@/pages/MonthPage";
+import { TasksPage } from "@/pages/TasksPage";
+import { NewItemPage } from "@/pages/NewItemPage";
 import { BottomNav } from "@/components/BottomNav";
 
 export type Page = "home" | "week" | "month" | "tasks" | "new";
@@ -17,6 +21,7 @@ export default function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [syncing, setSyncing] = useState(false);
+  const [showNew, setShowNew] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -31,19 +36,16 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Load local items on mount
   useEffect(() => {
     getAllItems().then(setItems).catch(console.error);
   }, []);
 
-  // Sync when online + authenticated
   useEffect(() => {
     if (!session?.user) return;
 
     async function trySync() {
       const status = await Network.getStatus();
       if (!status.connected) return;
-
       setSyncing(true);
       try {
         await fullSync(session!.user.id);
@@ -65,6 +67,10 @@ export default function App() {
     return () => { handle.then((h) => h.remove()); };
   }, [session]);
 
+  function refreshItems() {
+    getAllItems().then(setItems).catch(console.error);
+  }
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -77,32 +83,45 @@ export default function App() {
     return <LoginPage onLogin={setSession} />;
   }
 
-  function refreshItems() {
-    getAllItems().then(setItems).catch(console.error);
-  }
-
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      {/* Sync indicator */}
       {syncing && (
-        <div className="fixed top-0 inset-x-0 z-50 h-0.5 bg-foreground/20">
-          <div className="h-full bg-foreground animate-pulse" style={{ width: "60%" }} />
+        <div className="fixed top-0 inset-x-0 z-50 h-0.5 bg-foreground/10">
+          <div className="h-full w-3/5 bg-foreground/50 animate-pulse" />
         </div>
       )}
 
-      {/* Page content */}
       <main className="flex-1 overflow-y-auto pb-20">
         {currentPage === "home" && (
           <HomePage items={items} onRefresh={refreshItems} session={session} />
         )}
-        {currentPage !== "home" && (
-          <div className="flex items-center justify-center h-64 text-muted text-sm">
-            Próximamente: {currentPage}
-          </div>
-        )}
+        {currentPage === "week" && <WeekPage items={items} />}
+        {currentPage === "month" && <MonthPage items={items} />}
+        {currentPage === "tasks" && <TasksPage items={items} />}
       </main>
 
-      <BottomNav current={currentPage} onChange={setCurrentPage} />
+      <BottomNav
+        current={currentPage}
+        onChange={(page) => {
+          if (page === "new") {
+            setShowNew(true);
+          } else {
+            setCurrentPage(page);
+          }
+        }}
+      />
+
+      {showNew && (
+        <NewItemPage
+          userId={session.user.id}
+          onClose={() => setShowNew(false)}
+          onCreated={() => {
+            setShowNew(false);
+            refreshItems();
+            setCurrentPage("home");
+          }}
+        />
+      )}
     </div>
   );
 }
