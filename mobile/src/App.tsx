@@ -11,6 +11,7 @@ import { WeekPage } from "@/pages/WeekPage";
 import { MonthPage } from "@/pages/MonthPage";
 import { TasksPage } from "@/pages/TasksPage";
 import { NewItemPage } from "@/pages/NewItemPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 import { BottomNav } from "@/components/BottomNav";
 
 export type Page = "home" | "week" | "month" | "tasks" | "new";
@@ -22,17 +23,16 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [syncing, setSyncing] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
     });
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
-
     return () => listener.subscription.unsubscribe();
   }, []);
 
@@ -59,11 +59,7 @@ export default function App() {
     }
 
     trySync();
-
-    const handle = Network.addListener("networkStatusChange", (status) => {
-      if (status.connected) trySync();
-    });
-
+    const handle = Network.addListener("networkStatusChange", (s) => { if (s.connected) trySync(); });
     return () => { handle.then((h) => h.remove()); };
   }, [session]);
 
@@ -79,35 +75,30 @@ export default function App() {
     );
   }
 
-  if (!session) {
-    return <LoginPage onLogin={setSession} />;
-  }
+  if (!session) return <LoginPage onLogin={setSession} />;
+
+  const settingsProps = { onSettings: () => setShowSettings(true) };
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       {syncing && (
         <div className="fixed top-0 inset-x-0 z-50 h-0.5 bg-foreground/10">
-          <div className="h-full w-3/5 bg-foreground/50 animate-pulse" />
+          <div className="h-full w-3/5 bg-foreground/40 animate-pulse" />
         </div>
       )}
 
       <main className="flex-1 overflow-y-auto pb-20">
-        {currentPage === "home" && (
-          <HomePage items={items} onRefresh={refreshItems} session={session} />
-        )}
-        {currentPage === "week" && <WeekPage items={items} />}
-        {currentPage === "month" && <MonthPage items={items} />}
-        {currentPage === "tasks" && <TasksPage items={items} />}
+        {currentPage === "home" && <HomePage items={items} onRefresh={refreshItems} session={session} {...settingsProps} />}
+        {currentPage === "week" && <WeekPage items={items} {...settingsProps} />}
+        {currentPage === "month" && <MonthPage items={items} {...settingsProps} />}
+        {currentPage === "tasks" && <TasksPage items={items} {...settingsProps} />}
       </main>
 
       <BottomNav
         current={currentPage}
         onChange={(page) => {
-          if (page === "new") {
-            setShowNew(true);
-          } else {
-            setCurrentPage(page);
-          }
+          if (page === "new") setShowNew(true);
+          else setCurrentPage(page);
         }}
       />
 
@@ -115,11 +106,14 @@ export default function App() {
         <NewItemPage
           userId={session.user.id}
           onClose={() => setShowNew(false)}
-          onCreated={() => {
-            setShowNew(false);
-            refreshItems();
-            setCurrentPage("home");
-          }}
+          onCreated={() => { setShowNew(false); refreshItems(); setCurrentPage("home"); }}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsPage
+          session={session}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

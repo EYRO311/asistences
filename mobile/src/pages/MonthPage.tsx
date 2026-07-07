@@ -3,6 +3,7 @@ import type { Item } from "@/lib/types";
 import { occurrenceForDate } from "@/lib/recurrence";
 import { TYPE_BADGE_COLORS, TYPE_DOT_COLORS } from "@/lib/itemPresentation";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import { AppHeader } from "@/components/AppHeader";
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -13,9 +14,9 @@ function toDateParam(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-interface Props { items: Item[] }
+interface Props { items: Item[]; onSettings: () => void; }
 
-export function MonthPage({ items }: Props) {
+export function MonthPage({ items, onSettings }: Props) {
   const today = new Date();
   const [monthAnchor, setMonthAnchor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<string | null>(toDateParam(today));
@@ -44,11 +45,12 @@ export function MonthPage({ items }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 pt-6 pb-3 flex items-center gap-3">
-        <h1 className="font-handwriting text-3xl flex-1 capitalize">
+      <AppHeader title="" onSettings={onSettings} />
+      <div className="px-4 pb-2 flex items-center gap-2 -mt-2">
+        <h2 className="font-handwriting text-2xl flex-1 capitalize">
           {new Intl.DateTimeFormat("es-MX", { month: "long" }).format(monthAnchor)}{" "}
           <span className="text-muted">{monthAnchor.getFullYear()}</span>
-        </h1>
+        </h2>
         <button
           type="button"
           onClick={() => setMonthAnchor((m) => addMonths(m, -1))}
@@ -82,7 +84,7 @@ export function MonthPage({ items }: Props) {
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-7 gap-0.5 px-2">
+      <div className="grid grid-cols-7 gap-0 px-2">
         {gridDays.map((day) => {
           const inMonth = day.getMonth() === monthAnchor.getMonth();
           const isToday = isSameDay(day, today);
@@ -96,7 +98,7 @@ export function MonthPage({ items }: Props) {
               type="button"
               onClick={() => setSelectedDate(key)}
               className={[
-                "flex flex-col items-center rounded-xl py-1.5 px-0.5 min-h-14 transition-colors",
+                "flex flex-col items-center rounded-xl py-1 px-0.5 min-h-10 transition-colors",
                 inMonth ? "" : "opacity-20 pointer-events-none",
                 isSelected ? "bg-foreground text-background" : "hover:bg-surface",
               ].join(" ")}
