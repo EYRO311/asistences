@@ -2,8 +2,20 @@
 
 import { useState } from "react";
 import type { CachedRecommendation, PreferredTransport } from "@/lib/types";
-import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
+import { TRANSPORT_OPTIONS, type TablerIcon } from "@/lib/itemPresentation";
 import { sileo } from "sileo";
+import {
+  IconCar,
+  IconBike,
+  IconBus,
+  IconWalk,
+  IconCompass,
+  IconMapPin,
+  IconSunHigh,
+  IconSparkles,
+  IconRefresh,
+  IconX,
+} from "@tabler/icons-react";
 
 export function RecommendationsModal({
   itemId,
@@ -59,9 +71,9 @@ export function RecommendationsModal({
       <button
         type="button"
         onClick={handleOpen}
-        className="rounded-md border border-border-soft px-3 py-1.5 text-sm hover:bg-surface"
+        className="flex items-center gap-1.5 rounded-md border border-border-soft px-3 py-1.5 text-sm hover:bg-surface"
       >
-        ✨ Recomendaciones
+        <IconSparkles size={14} aria-hidden /> Recomendaciones
       </button>
 
       {open && (
@@ -80,16 +92,17 @@ export function RecommendationsModal({
                   <button
                     type="button"
                     onClick={() => handleRefresh(selectedTransport)}
-                    className="text-xs text-muted hover:text-foreground"
+                    className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
                     title="Recalcular"
                   >
+                    <IconRefresh size={12} aria-hidden />
                     {selectedTransport !== (data.preferredTransport ?? null)
-                      ? "↺ Recalcular con este transporte"
-                      : "↺ Actualizar"}
+                      ? "Recalcular con este transporte"
+                      : "Actualizar"}
                   </button>
                 )}
                 <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-foreground">
-                  ✕
+                  <IconX size={18} aria-hidden />
                 </button>
               </div>
             </div>
@@ -112,7 +125,7 @@ export function RecommendationsModal({
                             : "border-border-soft hover:bg-surface"
                         }`}
                       >
-                        <span aria-hidden>{opt.icon}</span>
+                        <opt.Icon size={13} aria-hidden />
                         {opt.label}
                       </button>
                     ))}
@@ -120,14 +133,14 @@ export function RecommendationsModal({
                 )}
 
                 {data.location && (
-                  <p className="text-muted">
-                    <span aria-hidden>📍 </span>{data.location}
+                  <p className="flex items-center gap-1 text-muted">
+                    <IconMapPin size={14} aria-hidden />{data.location}
                   </p>
                 )}
 
                 {data.weather ? (
-                  <p className="text-muted">
-                    <span aria-hidden>🌤️ </span>
+                  <p className="flex items-center gap-1 text-muted">
+                    <IconSunHigh size={14} aria-hidden />
                     {data.weather.description}, {Math.round(data.weather.tempMinC)}°–{Math.round(data.weather.tempMaxC)}°C,{" "}
                     {data.weather.precipitationProbability}% prob. de lluvia
                   </p>
@@ -137,28 +150,28 @@ export function RecommendationsModal({
 
                 {data.travel && (
                   <div className="rounded-md border border-border-soft bg-background px-3 py-2 space-y-2">
-                    <p className="font-medium">
-                      <span aria-hidden>🧭 </span>Cómo llegar ({data.travel.distanceKm} km)
+                    <p className="font-medium flex items-center gap-1.5">
+                      <IconCompass size={15} aria-hidden />Cómo llegar ({data.travel.distanceKm} km)
                     </p>
                     {/* Modo seleccionado destacado */}
                     {(() => {
-                      const modes = {
-                        car: { icon: "🚗", label: "Auto", d: data.travel.car },
-                        bike: { icon: "🚲", label: "Bici", d: data.travel.bike },
-                        public_transport: { icon: "🚌", label: "Transporte público", d: data.travel.publicTransport },
-                        walking: { icon: "🚶", label: "A pie", d: { minutes: Math.round(data.travel.distanceKm / 0.08), leaveMinutesBefore: Math.round(data.travel.distanceKm / 0.08) + 5 } },
+                      const modes: Record<string, { Icon: TablerIcon; label: string; d: { minutes: number; leaveMinutesBefore: number } }> = {
+                        car: { Icon: IconCar as TablerIcon, label: "Auto", d: data.travel.car },
+                        bike: { Icon: IconBike as TablerIcon, label: "Bici", d: data.travel.bike },
+                        public_transport: { Icon: IconBus as TablerIcon, label: "Transporte público", d: data.travel.publicTransport },
+                        walking: { Icon: IconWalk as TablerIcon, label: "A pie", d: { minutes: Math.round(data.travel.distanceKm / 0.08), leaveMinutesBefore: Math.round(data.travel.distanceKm / 0.08) + 5 } },
                       };
                       const active = selectedTransport ? modes[selectedTransport] : modes.car;
                       return (
                         <>
                           <div className="rounded-md bg-surface border border-foreground/20 px-3 py-2">
-                            <p className="font-semibold">{active.icon} {active.label}</p>
+                            <p className="font-semibold flex items-center gap-1.5"><active.Icon size={14} aria-hidden /> {active.label}</p>
                             <p className="text-xs text-muted mt-0.5">
                               {active.d.minutes} min de viaje — sal {active.d.leaveMinutesBefore} min antes
                             </p>
                             {selectedTransport === "public_transport" && data.travel.rideshare && (
                               <div className="mt-1.5 border-t border-border-soft pt-1.5">
-                                <p className="font-medium text-foreground/80 text-xs">🚕 Didi / Uber</p>
+                                <p className="font-medium text-foreground/80 text-xs flex items-center gap-1"><IconCar size={12} aria-hidden /> Didi / Uber</p>
                                 <p className="text-xs text-muted">
                                   {data.travel.rideshare.minutes} min — sal {data.travel.rideshare.leaveMinutesBefore} min antes ·{" "}
                                   est. ${data.travel.rideshare.costRangeMXN[0]}–${data.travel.rideshare.costRangeMXN[1]} MXN
@@ -170,7 +183,7 @@ export function RecommendationsModal({
                             {(Object.entries(modes) as [string, typeof modes.car][])
                               .filter(([k]) => k !== (selectedTransport ?? "car"))
                               .map(([k, m]) => (
-                                <li key={k}>{m.icon} {m.label}: {m.d.minutes} min — sal {m.d.leaveMinutesBefore} min antes</li>
+                                <li key={k} className="flex items-center gap-1"><m.Icon size={12} aria-hidden /> {m.label}: {m.d.minutes} min — sal {m.d.leaveMinutesBefore} min antes</li>
                               ))}
                           </ul>
                         </>

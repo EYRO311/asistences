@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { friendlyError } from "@/components/ErrorBanner";
+import { IconRefresh } from "@tabler/icons-react";
 
 const SYNCED_FLAG = "syncedThisSession";
 
@@ -116,7 +117,7 @@ export function SyncWidget() {
         className="text-muted hover:text-foreground disabled:opacity-50"
         title="Importar lo que agregaste directo en Google Calendar o Notion, y unir tareas duplicadas"
       >
-        {syncing ? "Sincronizando..." : "⟳ Sincronizar"}
+        {syncing ? "Sincronizando..." : <><IconRefresh size={14} className="inline -mt-0.5 mr-1" aria-hidden />Sincronizar</>}
       </button>
       <Link
         href="/settings"

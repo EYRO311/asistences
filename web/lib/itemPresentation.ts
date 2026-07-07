@@ -1,4 +1,14 @@
 import type { Category, Effort, Item, ItemType, PreferredTransport, Priority, TaskStatus } from "@/lib/types";
+import { IconCar, IconBike, IconBus, IconWalk } from "@tabler/icons-react";
+import type { FC, CSSProperties } from "react";
+
+export type TablerIcon = FC<{
+  size?: number | string;
+  stroke?: number | string;
+  className?: string;
+  style?: CSSProperties;
+  "aria-hidden"?: boolean | "true" | "false";
+}>;
 
 export const TYPE_LABELS: Record<ItemType, string> = {
   compromiso: "Compromiso",
@@ -24,11 +34,11 @@ export const TASK_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "listo", label: "Listo" },
 ];
 
-export const TRANSPORT_OPTIONS: { value: PreferredTransport; label: string; icon: string }[] = [
-  { value: "car", label: "Auto", icon: "🚗" },
-  { value: "bike", label: "Bici", icon: "🚲" },
-  { value: "public_transport", label: "Transporte público", icon: "🚌" },
-  { value: "walking", label: "A pie", icon: "🚶" },
+export const TRANSPORT_OPTIONS: { value: PreferredTransport; label: string; Icon: TablerIcon }[] = [
+  { value: "car", label: "Auto", Icon: IconCar as TablerIcon },
+  { value: "bike", label: "Bici", Icon: IconBike as TablerIcon },
+  { value: "public_transport", label: "Transporte público", Icon: IconBus as TablerIcon },
+  { value: "walking", label: "A pie", Icon: IconWalk as TablerIcon },
 ];
 
 export const CATEGORY_OPTIONS: Category[] = [

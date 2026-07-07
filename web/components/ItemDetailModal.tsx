@@ -13,7 +13,22 @@ import {
   TRANSPORT_OPTIONS,
   STATUS_LABELS,
   formatDateRange,
+  type TablerIcon,
 } from "@/lib/itemPresentation";
+import {
+  IconCar,
+  IconBike,
+  IconBus,
+  IconWalk,
+  IconCompass,
+  IconMapPin,
+  IconSunHigh,
+  IconShirt,
+  IconVideo,
+  IconSparkles,
+  IconRefresh,
+  IconX,
+} from "@tabler/icons-react";
 
 function TravelBlock({
   travel,
@@ -23,31 +38,31 @@ function TravelBlock({
   selected: PreferredTransport | null;
 }) {
   const modes = [
-    { key: "car" as const, icon: "🚗", label: "Auto", data: travel.car },
-    { key: "bike" as const, icon: "🚲", label: "Bici", data: travel.bike },
-    { key: "public_transport" as const, icon: "🚌", label: "Transporte público", data: travel.publicTransport },
-    { key: "walking" as const, icon: "🚶", label: "A pie", data: { minutes: Math.round(travel.distanceKm / 0.08), leaveMinutesBefore: Math.round(travel.distanceKm / 0.08) + 5 } },
+    { key: "car" as const, Icon: IconCar as TablerIcon, label: "Auto", data: travel.car },
+    { key: "bike" as const, Icon: IconBike as TablerIcon, label: "Bici", data: travel.bike },
+    { key: "public_transport" as const, Icon: IconBus as TablerIcon, label: "Transporte público", data: travel.publicTransport },
+    { key: "walking" as const, Icon: IconWalk as TablerIcon, label: "A pie", data: { minutes: Math.round(travel.distanceKm / 0.08), leaveMinutesBefore: Math.round(travel.distanceKm / 0.08) + 5 } },
   ];
 
   const activeMode = modes.find((m) => m.key === selected) ?? modes[0];
 
   return (
     <div className="rounded-md border border-border-soft bg-background px-3 py-2 text-sm space-y-2">
-      <p className="font-medium">
-        <span aria-hidden>🧭 </span>Cómo llegar ({travel.distanceKm} km)
+      <p className="font-medium flex items-center gap-1.5">
+        <IconCompass size={15} aria-hidden />Cómo llegar ({travel.distanceKm} km)
       </p>
 
       {/* Modo seleccionado destacado */}
       <div className="rounded-md bg-surface border border-foreground/20 px-3 py-2">
-        <p className="font-semibold">
-          {activeMode.icon} {activeMode.label}
+        <p className="font-semibold flex items-center gap-1.5">
+          <activeMode.Icon size={15} aria-hidden />{activeMode.label}
         </p>
         <p className="text-muted text-xs mt-0.5">
           {activeMode.data.minutes} min de viaje — sal {activeMode.data.leaveMinutesBefore} min antes
         </p>
         {selected === "public_transport" && travel.rideshare && (
           <div className="mt-1.5 border-t border-border-soft pt-1.5">
-            <p className="font-medium text-foreground/80">🚕 Didi / Uber</p>
+            <p className="font-medium text-foreground/80 flex items-center gap-1"><IconCar size={13} aria-hidden /> Didi / Uber</p>
             <p className="text-xs text-muted">
               {travel.rideshare.minutes} min — sal {travel.rideshare.leaveMinutesBefore} min antes ·{" "}
               est. ${travel.rideshare.costRangeMXN[0]}–${travel.rideshare.costRangeMXN[1]} MXN
@@ -59,8 +74,8 @@ function TravelBlock({
       {/* Otros modos como referencia */}
       <ul className="space-y-0.5 text-xs text-muted">
         {modes.filter((m) => m.key !== selected).map((m) => (
-          <li key={m.key}>
-            {m.icon} {m.label}: {m.data.minutes} min — sal {m.data.leaveMinutesBefore} min antes
+          <li key={m.key} className="flex items-center gap-1">
+            <m.Icon size={12} aria-hidden /> {m.label}: {m.data.minutes} min — sal {m.data.leaveMinutesBefore} min antes
           </li>
         ))}
       </ul>
@@ -114,7 +129,7 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
               : "border-border-soft hover:bg-surface"
           }`}
         >
-          <span aria-hidden>{opt.icon}</span>
+          <opt.Icon size={13} aria-hidden />
           {opt.label}
         </button>
       ))}
@@ -129,9 +144,9 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
         <button
           type="button"
           onClick={() => load(false, selectedTransport)}
-          className="w-full rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface"
+          className="w-full flex items-center justify-center gap-1.5 rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface"
         >
-          ✨ Cargar recomendaciones
+          <IconSparkles size={15} aria-hidden /> Cargar recomendaciones
         </button>
       </div>
     );
@@ -157,23 +172,24 @@ function RecommendationsInline({ itemId, initial }: { itemId: string; initial: C
         <button
           type="button"
           onClick={() => load(true, selectedTransport)}
-          className="text-xs text-muted hover:text-foreground"
+          className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
         >
-          {transportChanged ? "↺ Recalcular con este transporte" : "↺ Actualizar"}
+          <IconRefresh size={12} aria-hidden />
+          {transportChanged ? "Recalcular con este transporte" : "Actualizar"}
         </button>
       </div>
 
       {transportSelector}
 
       {data.location && (
-        <p className="text-sm text-muted">
-          <span aria-hidden>📍 </span>{data.location}
+        <p className="flex items-center gap-1 text-sm text-muted">
+          <IconMapPin size={14} aria-hidden />{data.location}
         </p>
       )}
 
       {data.weather && (
-        <p className="text-sm text-muted">
-          <span aria-hidden>🌤️ </span>
+        <p className="flex items-center gap-1 text-sm text-muted">
+          <IconSunHigh size={14} aria-hidden />
           {data.weather.description}, {Math.round(data.weather.tempMinC)}°–{Math.round(data.weather.tempMaxC)}°C,{" "}
           {data.weather.precipitationProbability}% lluvia
         </p>
@@ -221,8 +237,8 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
             </span>
             <h2 className="font-handwriting text-2xl leading-tight">{item.title}</h2>
           </div>
-          <button type="button" onClick={onClose} className="mt-1 shrink-0 text-muted hover:text-foreground text-lg">
-            ✕
+          <button type="button" onClick={onClose} className="mt-1 shrink-0 text-muted hover:text-foreground">
+            <IconX size={18} aria-hidden />
           </button>
         </div>
 
@@ -232,8 +248,8 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
 
           {/* Ubicación */}
           {item.location && (
-            <p className="text-muted">
-              <span aria-hidden>📍 </span>{item.location}
+            <p className="flex items-center gap-1 text-muted">
+              <IconMapPin size={14} aria-hidden />{item.location}
             </p>
           )}
 
@@ -270,8 +286,8 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
 
           {/* Vestimenta */}
           {item.outfit_suggestion && (
-            <p className="text-muted">
-              <span aria-hidden>👕 </span>{item.outfit_suggestion}
+            <p className="flex items-start gap-1.5 text-muted">
+              <IconShirt size={15} className="shrink-0 mt-0.5" aria-hidden />{item.outfit_suggestion}
             </p>
           )}
 
@@ -283,7 +299,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm hover:bg-background transition-colors"
             >
-              <span aria-hidden>📹</span>
+              <IconVideo size={15} aria-hidden />
               Unirse a la videollamada
             </a>
           )}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Category, Effort, Item, Priority, TaskStatus } from "@/lib/types";
 import { sileo } from "sileo";
+import { IconBulb } from "@tabler/icons-react";
 import {
   CATEGORY_OPTIONS,
   EFFORT_OPTIONS,
@@ -126,7 +127,7 @@ export function EditItemForm({ item }: { item: Item }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       {missingInfo && (
         <p className="rounded-md border border-border-soft bg-surface px-3 py-2 text-xs text-muted">
-          <span aria-hidden>💡 </span>
+          <IconBulb size={14} className="inline -mt-0.5 mr-1" aria-hidden />
           Esta tarea se importó desde {item.source === "google_sync" ? "Google Calendar" : "Notion"}. Completa el
           tipo, prioridad, esfuerzo y categoría para mejores recomendaciones de IA.
         </p>
