@@ -63,11 +63,11 @@ function TravelBlock({
         Cómo llegar ({travel.distanceKm} km)
       </p>
       <div className="rounded-md bg-surface border border-foreground/20 px-3 py-2">
-        <p className="font-semibold flex items-center gap-1.5">
+        <p className="font-semibold flex items-center gap-1.5 font-handwriting text-base">
           <activeMode.Icon size={14} aria-hidden />
           {activeMode.label}
         </p>
-        <p className="text-muted text-xs mt-0.5">
+        <p className="font-handwriting text-sm text-muted mt-0.5">
           {activeMode.data.minutes} min de viaje — sal {activeMode.data.leaveMinutesBefore} min antes
         </p>
         {selected === "public_transport" && travel.rideshare && (
@@ -82,7 +82,7 @@ function TravelBlock({
           </div>
         )}
       </div>
-      <ul className="space-y-0.5 text-xs text-muted">
+      <ul className="space-y-0.5 font-handwriting text-sm text-muted">
         {modes
           .filter((m) => m.key !== (selected ?? "car"))
           .map((m) => (
@@ -212,7 +212,7 @@ function RecommendationsInline({
       )}
 
       {data.weather && (
-        <p className="flex items-center gap-1 text-sm text-muted">
+        <p className="flex items-center gap-1 font-handwriting text-base text-muted">
           <IconSunHigh size={13} aria-hidden />
           {data.weather.description}, {Math.round(data.weather.tempMinC)}°–
           {Math.round(data.weather.tempMaxC)}°C, {data.weather.precipitationProbability}% lluvia
@@ -222,7 +222,7 @@ function RecommendationsInline({
       {data.travel && <TravelBlock travel={data.travel} selected={selectedTransport} />}
 
       {(data.recommendation ?? data.outfit_suggestion) && (
-        <div className="rounded-md border border-border-soft bg-background px-3 py-2 text-sm">
+        <div className="rounded-md border border-border-soft bg-background px-3 py-2 font-handwriting text-base leading-snug">
           {data.recommendation ?? data.outfit_suggestion}
         </div>
       )}
