@@ -68,11 +68,11 @@ function TravelBlock({
         Cómo llegar ({travel.distanceKm} km)
       </p>
       <div className="rounded-md bg-surface border border-foreground/20 px-3 py-2">
-        <p className="font-semibold font-handwriting text-base flex items-center gap-1.5">
-          <activeMode.Icon size={14} aria-hidden />
+        <p className="font-semibold font-handwriting text-lg flex items-center gap-1.5">
+          <activeMode.Icon size={16} aria-hidden />
           {activeMode.label}
         </p>
-        <p className="font-handwriting text-sm text-muted mt-0.5">
+        <p className="font-handwriting text-base text-muted mt-0.5">
           {activeMode.data.minutes} min de viaje — sal {activeMode.data.leaveMinutesBefore} min antes
         </p>
         {selected === "public_transport" && travel.rideshare && (
@@ -87,7 +87,7 @@ function TravelBlock({
           </div>
         )}
       </div>
-      <ul className="space-y-0.5 font-handwriting text-sm text-muted">
+      <ul className="space-y-1 font-handwriting text-base text-muted">
         {modes
           .filter((m) => m.key !== (selected ?? "car"))
           .map((m) => (
@@ -185,7 +185,7 @@ function RecommendationsInline({
       {data.travel && <TravelBlock travel={data.travel} selected={selectedTransport} />}
 
       {(data.recommendation ?? data.outfit_suggestion) && (
-        <div className="rounded-md border border-border-soft bg-background px-3 py-2 font-handwriting text-base leading-snug">
+        <div className="rounded-md border border-border-soft bg-background px-4 py-3 font-handwriting text-xl leading-relaxed">
           {data.recommendation ?? data.outfit_suggestion}
         </div>
       )}
@@ -288,8 +288,8 @@ function KeypointsPanel({
             </div>
           )}
           {recData.weather && (
-            <div className="flex items-start gap-1 text-[11px] text-muted leading-snug font-handwriting">
-              <IconSunHigh size={11} className="shrink-0 mt-0.5" aria-hidden />
+            <div className="flex items-start gap-1 text-xs text-muted leading-snug font-handwriting">
+              <IconSunHigh size={12} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 {recData.weather.description},{" "}
                 {Math.round(recData.weather.tempMinC)}°–{Math.round(recData.weather.tempMaxC)}°C,{" "}
