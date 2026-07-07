@@ -28,7 +28,7 @@ export async function NavBar() {
         {/* SyncWidget + email/salir en desktop */}
         <div className="flex shrink-0 items-center gap-3">
           <SyncWidget />
-          <div className="hidden items-center gap-3 lg:flex">
+          <div className="hidden items-center gap-3 nav:flex">
             <span className="text-muted truncate max-w-50">{user.email}</span>
             <form action="/api/auth/signout" method="post">
               <button type="submit" className="text-muted hover:text-foreground">

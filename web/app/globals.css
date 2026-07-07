@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme {
+  --breakpoint-xs: 25rem;    /* 400px — límite inferior de hamburguesa */
+  --breakpoint-nav: 62.5rem; /* 1000px — límite superior de hamburguesa / inicio de nav completa */
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {

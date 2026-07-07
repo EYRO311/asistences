@@ -41,8 +41,8 @@ export function NavMenuClient({ email }: { email: string }) {
 
   return (
     <div ref={menuRef} className="contents">
-      {/* Links visibles en pantallas grandes */}
-      <div className="hidden lg:flex items-center gap-5">
+      {/* Links visibles en pantallas ≥ 1000px */}
+      <div className="hidden nav:flex items-center gap-5">
         {LINKS.map((link) => (
           <Link
             key={link.href}
@@ -58,9 +58,9 @@ export function NavMenuClient({ email }: { email: string }) {
         ))}
       </div>
 
-      {/* Botón hamburguesa — visible en pantallas < lg */}
+      {/* Botón hamburguesa — visible solo entre 400px y 1000px */}
       <button
-        className="lg:hidden text-muted hover:text-foreground p-1 -mr-1"
+        className="hidden xs:flex nav:hidden items-center text-muted hover:text-foreground p-1 -mr-1"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Cerrar menú" : "Abrir menú"}
         aria-expanded={open}
@@ -101,7 +101,7 @@ export function NavMenuClient({ email }: { email: string }) {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 border-b border-border-soft bg-surface shadow-lg lg:hidden">
+        <div className="absolute left-0 right-0 top-full z-50 border-b border-border-soft bg-surface shadow-lg nav:hidden">
           <div className="mx-auto max-w-3xl px-4 py-1 lg:max-w-6xl">
             {LINKS.map((link) => (
               <Link

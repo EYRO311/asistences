@@ -28,7 +28,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border-soft bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border-soft bg-surface pb-[env(safe-area-inset-bottom)] xs:hidden">
       <div className="relative mx-auto flex h-16 max-w-md items-center justify-between px-6">
         {LINKS.map((link) => (
           <Link
