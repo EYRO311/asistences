@@ -339,7 +339,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
         className="
           fixed inset-0 z-50 flex flex-col bg-surface border-border-soft overflow-hidden
           md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2
-          md:w-full md:max-w-2xl md:max-h-[92vh] md:rounded-2xl md:border md:shadow-xl
+          md:w-full md:max-w-3xl lg:max-w-5xl md:max-h-[92vh] md:rounded-2xl md:border md:shadow-xl
         "
         onClick={(e) => e.stopPropagation()}
       >
@@ -358,7 +358,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               <h2 className="font-handwriting text-2xl leading-tight">{item.title}</h2>
             </div>
           </div>
-          <div className="w-36 md:w-44 shrink-0 px-4 pt-3 pb-3">
+          <div className="w-36 md:w-52 shrink-0 px-4 pt-3 pb-3">
             <div className="flex items-start justify-between mb-1.5">
               <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Date</p>
               <button
@@ -397,7 +397,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
           <div
             className={`
               md:flex flex-col shrink-0
-              w-full md:w-40
+              w-full md:w-48 lg:w-56
               overflow-y-auto
               border-b md:border-b-0 md:border-r border-border-soft
               ${keypointsOpen ? "flex" : "hidden"}
