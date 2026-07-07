@@ -16,6 +16,9 @@ import type { Item, Profile } from "@/lib/types";
 const SYNC_WINDOW_PAST_DAYS = 30;
 const SYNC_WINDOW_FUTURE_DAYS = 90;
 
+// Mínimo de días de la semana distintos para considerar eventos no-recurrentes como rutina virtual.
+const VIRTUAL_ROUTINE_MIN_WEEKDAYS = 2;
+
 export interface SyncResult {
   importedFromGoogle: number;
   importedFromNotion: number;
@@ -37,17 +40,22 @@ function duplicateKey(title: string, startTime: string | null): string | null {
   return `${title.trim().toLowerCase()}|${normalizeISO(startTime)}`;
 }
 
-/** Extrae "HH:mm" de un ISO datetime como "2026-07-01T09:00:00-06:00". */
+/** Extrae "HH:mm" de un ISO datetime como "2026-07-01T09:00:00-06:00". Devuelve null para fechas sin hora. */
 function extractHHMM(isoDatetime: string): string | null {
   const match = isoDatetime.match(/T(\d{2}:\d{2})/);
   return match ? match[1] : null;
 }
 
+/** Día ISO (1=lun…7=dom) de una cadena de fecha "YYYY-MM-DD". */
+function isoWeekdayFromDateStr(dateStr: string): number {
+  const jsDay = new Date(dateStr + "T12:00:00Z").getUTCDay();
+  return jsDay === 0 ? 7 : jsDay;
+}
+
 /**
  * Clave de duplicado para tareas con rutina (recurrence_days no vacío): se
  * basa en título + días de la semana, no en start_time exacto, porque cada
- * ocurrencia de la misma rutina puede tener un start_time distinto (p. ej.
- * filas remanentes de una rutina que antes se guardaba una vez por día).
+ * ocurrencia de la misma rutina puede tener un start_time distinto.
  */
 function routineDuplicateKey(item: Item): string | null {
   if (!item.recurrence_days || item.recurrence_days.length === 0) return null;
@@ -62,8 +70,11 @@ function routineDuplicateKey(item: Item): string | null {
  * duplicada (mismo título, misma fecha/hora) en una sola, conservando la
  * que tenga más información.
  *
- * Solo crea/junta — no actualiza ediciones de algo que ya estaba bien
- * vinculado (eso queda para una futura mejora).
+ * Reglas para eventos recurrentes de Google Calendar:
+ * - Si coincide (por título normalizado + HH:mm) con una rutina o ítem existente → enlazar y omitir.
+ * - Si es nuevo → crear UN SOLO ítem con recurrence_days/recurrence_start_time/recurrence_end_time.
+ * - Eventos no-recurrentes que aparezcan en 2+ días de la semana distintos con el mismo nombre y
+ *   horario → tratarlos igual que una rutina (crear un solo ítem con recurrence_days).
  */
 export async function runFullSync(userId: string): Promise<SyncResult> {
   const supabase = createServiceRoleClient();
@@ -86,8 +97,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     if (key) byDuplicateKey.set(key, item);
   }
 
-  // Mapa para detectar rutinas locales (creadas en la app) que coincidan con
-  // eventos recurrentes de Google: clave = "título|HH:mm" (recurrence_start_time).
+  // Rutinas locales: clave = "título_lower|HH:mm" (usando recurrence_start_time).
   const routineByTitleAndTime = new Map<string, Item>();
   for (const item of existingItems) {
     if (item.recurrence_days?.length && item.recurrence_start_time) {
@@ -96,9 +106,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     }
   }
 
-  // Mapa para detectar ítems ya importados de Google (google_sync) que podrían
-  // tener guardado el ID de instancia en lugar del ID maestro (formato anterior).
-  // Clave = "título|HH:mm" extraído del start_time real del ítem.
+  // Ítems google_sync sin recurrence_days que podrían tener ID de instancia antigua.
   const googleSyncByTitleAndTime = new Map<string, Item>();
   for (const item of existingItems) {
     if (item.source === "google_sync" && item.start_time) {
@@ -110,8 +118,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     }
   }
 
-  // Fallback: cualquier ítem con recurrence_days no vacío — se usa cuando la
-  // rutina no tiene recurrence_start_time y no podemos comparar por hora exacta.
+  // Fallback: cualquier ítem con recurrence_days no vacío (para cuando no hay recurrence_start_time).
   const routineByTitle = new Map<string, Item>();
   for (const item of existingItems) {
     if (item.recurrence_days?.length) {
@@ -131,62 +138,229 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     const timeMax = new Date(now.getTime() + SYNC_WINDOW_FUTURE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     const events = await listCalendarEvents(googleToken, timeMin, timeMax);
+    type CalEvent = (typeof events)[0];
 
-    // Eventos recurrentes externos (no creados por la app) cuya serie ya fue importada esta ronda.
+    // Pre-proceso 1: agrupar instancias de eventos recurrentes por ID maestro.
+    const timedInstancesByMasterId = new Map<string, CalEvent[]>();
+    for (const event of events) {
+      if (!event.recurringEventId || event.allDay) continue;
+      const list = timedInstancesByMasterId.get(event.recurringEventId) ?? [];
+      list.push(event);
+      timedInstancesByMasterId.set(event.recurringEventId, list);
+    }
+
+    // Pre-proceso 2: agrupar eventos no-recurrentes con hora por "título_lower|HH:mm".
+    const nonRecurringByTitleTime = new Map<string, CalEvent[]>();
+    for (const event of events) {
+      if (event.recurringEventId || event.allDay) continue;
+      const hhmm = extractHHMM(event.start);
+      if (!hhmm) continue;
+      const key = `${event.title.trim().toLowerCase()}|${hhmm}`;
+      const list = nonRecurringByTitleTime.get(key) ?? [];
+      list.push(event);
+      nonRecurringByTitleTime.set(key, list);
+    }
+
+    // "Rutinas virtuales": grupos no-recurrentes que aparecen en 2+ días de la semana distintos.
+    const virtualRoutineKeys = new Set<string>();
+    for (const [key, instances] of nonRecurringByTitleTime.entries()) {
+      const weekdays = new Set(instances.map((inst) => isoWeekdayFromDateStr(inst.start.slice(0, 10))));
+      if (weekdays.size >= VIRTUAL_ROUTINE_MIN_WEEKDAYS) virtualRoutineKeys.add(key);
+    }
+
+    /** Deduce los días ISO (1=lun…7=dom) en que aparece una lista de instancias. */
+    function deriveRecurrenceDays(eventList: CalEvent[]): number[] {
+      const days = new Set<number>();
+      for (const inst of eventList) {
+        days.add(isoWeekdayFromDateStr(inst.start.slice(0, 10)));
+      }
+      return [...days].sort((a, b) => a - b);
+    }
+
+    // Sets para evitar procesar la misma serie más de una vez en este sync.
     const importedRecurringIds = new Set<string>();
+    const importedVirtualRoutineKeys = new Set<string>();
+
+    // Función compartida: crea el ítem de rutina en Supabase y su espejo en Notion.
+    async function createRoutineFromGoogle(params: {
+      title: string;
+      description: string | null;
+      firstStart: string;
+      firstEnd: string | null;
+      googleEventId: string;
+      meetLink: string | null | undefined;
+      recurrenceDays: number[];
+      recurrenceStartTime: string;
+      recurrenceEndTime: string | null;
+    }): Promise<void> {
+      const { data: item, error } = await supabase
+        .from("items")
+        .insert({
+          user_id: userId,
+          type: "evento",
+          title: params.title,
+          description: params.description,
+          start_time: params.firstStart,
+          end_time: params.firstEnd,
+          all_day: false,
+          add_to_calendar: true,
+          status: "syncing",
+          google_event_id: params.googleEventId,
+          meet_link: params.meetLink ?? null,
+          source: "google_sync",
+          recurrence_days: params.recurrenceDays,
+          recurrence_start_time: params.recurrenceStartTime,
+          recurrence_end_time: params.recurrenceEndTime,
+        })
+        .select("*")
+        .single<Item>();
+
+      if (error || !item) {
+        errors.push(`Google "${params.title}": ${error?.message ?? "no se pudo guardar"}`);
+        return;
+      }
+
+      // Registrar en los mapas locales para que el resto de este sync los reconozca.
+      const titleKey = params.title.trim().toLowerCase();
+      routineByTitleAndTime.set(`${titleKey}|${params.recurrenceStartTime}`, item);
+      routineByTitle.set(titleKey, item);
+
+      try {
+        if (profile?.notion_database_id) {
+          const notionToken = await getNotionAccessToken(userId);
+          const { pageId, url } = await createItemNotionPage(notionToken, profile.notion_database_id, item);
+          await supabase
+            .from("items")
+            .update({ notion_page_id: pageId, notion_url: url, status: "confirmed" })
+            .eq("id", item.id);
+          knownNotionIds.add(pageId);
+        } else {
+          await supabase.from("items").update({ status: "confirmed" }).eq("id", item.id);
+        }
+      } catch (err) {
+        errors.push(`Notion (espejo de "${params.title}"): ${err instanceof Error ? err.message : "error"}`);
+        await supabase.from("items").update({ status: "failed" }).eq("id", item.id);
+      }
+
+      importedFromGoogle += 1;
+    }
 
     for (const event of events) {
+      // Ya conocido por su ID de instancia o por el ID maestro de su serie.
       if (knownGoogleIds.has(event.id)) continue;
-
-      // Ocurrencia de un evento recurrente cuyo maestro ya está en la BD (lo creó la app):
-      // Google expande el RRULE en instancias individuales al listar con singleEvents=true;
-      // la ID maestra es la que guardamos en items.google_event_id, no las instancias.
       if (event.recurringEventId && knownGoogleIds.has(event.recurringEventId)) continue;
 
-      // Serie recurrente externa (creada fuera de la app): solo importar la primera ocurrencia
-      // para que quede como referencia, ignorar el resto de la serie.
+      // ── Evento recurrente (tiene recurringEventId) ──────────────────────
       if (event.recurringEventId) {
         if (importedRecurringIds.has(event.recurringEventId)) continue;
 
-        // Si ya existe en la BD una rutina o un ítem de google_sync con el
-        // mismo título y mismo horario (HH:mm), considerarlos la misma serie.
-        // Actualiza el google_event_id al ID maestro si era una instancia antigua.
-        if (!event.allDay) {
-          const eventHHMM = extractHHMM(event.start);
-          if (eventHHMM) {
-            const titleTimeKey = `${event.title.trim().toLowerCase()}|${eventHHMM}`;
-            const masterGoogleId = event.recurringEventId;
+        const masterGoogleId = event.recurringEventId;
+        const eventHHMM = event.allDay ? null : extractHHMM(event.start);
+        const titleKey = event.title.trim().toLowerCase();
+        const titleTimeKey = eventHHMM ? `${titleKey}|${eventHHMM}` : null;
 
-            const matchingItem =
-              routineByTitleAndTime.get(titleTimeKey) ??
-              googleSyncByTitleAndTime.get(titleTimeKey) ??
-              routineByTitle.get(event.title.trim().toLowerCase());
+        // Buscar coincidencia en rutinas o ítems existentes (comparación case-insensitive).
+        const matchingItem =
+          (titleTimeKey
+            ? (routineByTitleAndTime.get(titleTimeKey) ?? googleSyncByTitleAndTime.get(titleTimeKey))
+            : null) ?? routineByTitle.get(titleKey);
 
-            if (matchingItem) {
-              importedRecurringIds.add(masterGoogleId);
-              // Actualizar al ID maestro si el ítem tiene un ID de instancia o está sin vincular.
-              if (matchingItem.google_event_id !== masterGoogleId) {
-                await supabase.from("items").update({ google_event_id: masterGoogleId }).eq("id", matchingItem.id);
-                knownGoogleIds.add(masterGoogleId);
-              }
-              continue;
-            }
+        if (matchingItem) {
+          // Ya existe una rutina equivalente: sólo enlazar al ID maestro si hace falta.
+          importedRecurringIds.add(masterGoogleId);
+          if (matchingItem.google_event_id !== masterGoogleId) {
+            await supabase
+              .from("items")
+              .update({ google_event_id: masterGoogleId })
+              .eq("id", matchingItem.id);
+            knownGoogleIds.add(masterGoogleId);
           }
+          continue;
         }
 
-        importedRecurringIds.add(event.recurringEventId);
+        // Serie nueva: marcar como importada para ignorar el resto de sus instancias.
+        importedRecurringIds.add(masterGoogleId);
+        knownGoogleIds.add(masterGoogleId);
+
+        // Evento recurrente con hora → crear como rutina con recurrence_days.
+        if (!event.allDay && eventHHMM) {
+          const allInstances = timedInstancesByMasterId.get(masterGoogleId) ?? [event];
+          const recurrenceDays = deriveRecurrenceDays(allInstances);
+          const endHHMM = event.end ? extractHHMM(event.end) : null;
+
+          await createRoutineFromGoogle({
+            title: event.title,
+            description: event.description,
+            firstStart: event.start,
+            firstEnd: event.end,
+            googleEventId: masterGoogleId,
+            meetLink: event.meetLink,
+            recurrenceDays,
+            recurrenceStartTime: eventHHMM,
+            recurrenceEndTime: endHHMM,
+          });
+          continue;
+        }
+
+        // Evento recurrente de día completo: cae al código de evento individual (sin recurrence_days).
+        // La serie completa queda representada por esta primera instancia.
       }
 
-      // Ya existe una tarea con el mismo título y fecha/hora: no duplicar,
-      // solo enlazar este evento si a esa tarea le faltaba.
+      // ── Rutina virtual (no-recurrente, mismo nombre+hora en 2+ días de la semana) ──
+      if (!event.recurringEventId && !event.allDay) {
+        const hhmm = extractHHMM(event.start);
+        if (hhmm) {
+          const vKey = `${event.title.trim().toLowerCase()}|${hhmm}`;
+          if (virtualRoutineKeys.has(vKey)) {
+            if (importedVirtualRoutineKeys.has(vKey)) continue;
+
+            const titleKey = event.title.trim().toLowerCase();
+            const matchingItem =
+              routineByTitleAndTime.get(`${titleKey}|${hhmm}`) ??
+              routineByTitle.get(titleKey);
+
+            if (matchingItem) {
+              // Ya existe rutina equivalente; no hace falta crear nada.
+              importedVirtualRoutineKeys.add(vKey);
+              continue;
+            }
+
+            importedVirtualRoutineKeys.add(vKey);
+            const instances = nonRecurringByTitleTime.get(vKey) ?? [event];
+            const recurrenceDays = deriveRecurrenceDays(instances);
+            const endHHMM = event.end ? extractHHMM(event.end) : null;
+
+            await createRoutineFromGoogle({
+              title: event.title,
+              description: event.description,
+              firstStart: event.start,
+              firstEnd: event.end,
+              googleEventId: event.id,
+              meetLink: event.meetLink,
+              recurrenceDays,
+              recurrenceStartTime: hhmm,
+              recurrenceEndTime: endHHMM,
+            });
+            continue;
+          }
+        }
+      }
+
+      // ── Evento individual normal ────────────────────────────────────────
+      // Ya existe una tarea con el mismo título y fecha/hora: no duplicar.
       const existingMatch = byDuplicateKey.get(duplicateKey(event.title, event.start) ?? "");
       if (existingMatch) {
         const patch: Record<string, unknown> = {};
-        if (!existingMatch.google_event_id) patch.google_event_id = event.id;
+        const googleIdToStore = event.recurringEventId ?? event.id;
+        if (!existingMatch.google_event_id) patch.google_event_id = googleIdToStore;
         if (!existingMatch.description && event.description) patch.description = event.description;
         if (event.meetLink && !existingMatch.meet_link) patch.meet_link = event.meetLink;
         if (Object.keys(patch).length > 0) {
           await supabase.from("items").update(patch).eq("id", existingMatch.id);
+        }
+        if (event.recurringEventId) {
+          importedRecurringIds.add(event.recurringEventId);
+          knownGoogleIds.add(event.recurringEventId);
         }
         continue;
       }
@@ -223,7 +397,6 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
             .from("items")
             .update({ notion_page_id: pageId, notion_url: url, status: "confirmed" })
             .eq("id", item.id);
-          // Registrar el pageId para que la fase Notion→App no lo reimporte.
           knownNotionIds.add(pageId);
         } else {
           await supabase.from("items").update({ status: "confirmed" }).eq("id", item.id);
@@ -315,7 +488,6 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
             .from("items")
             .update({ google_event_id: googleEventId, status: "confirmed" })
             .eq("id", item.id);
-          // Registrar el eventId para que futuras sincronizaciones no lo reimporte.
           knownGoogleIds.add(googleEventId);
         } catch (err) {
           errors.push(`Google Calendar (espejo de "${page.title}"): ${err instanceof Error ? err.message : "error"}`);
@@ -340,16 +512,75 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
     errors.push(`Unir duplicados: ${err instanceof Error ? err.message : "error"}`);
   }
 
+  try {
+    mergedDuplicates += await cleanupRoutineOccurrenceDuplicates(userId);
+  } catch (err) {
+    errors.push(`Limpiar duplicados de rutina: ${err instanceof Error ? err.message : "error"}`);
+  }
+
   return { importedFromGoogle, importedFromNotion, mergedDuplicates, errors };
 }
 
 /**
+ * Elimina ítems de google_sync que son ocurrencias individuales (por día) de
+ * una serie recurrente que ya existe como rutina en la app (con recurrence_days).
+ *
+ * Criterio: ítem con source="google_sync", sin recurrence_days, cuyo título +
+ * HH:mm del start_time coincide con alguna rutina existente (comparación case-insensitive).
+ */
+async function cleanupRoutineOccurrenceDuplicates(userId: string): Promise<number> {
+  const supabase = createServiceRoleClient();
+
+  const { data: itemsRaw } = await supabase.from("items").select("*").eq("user_id", userId);
+  const items = (itemsRaw ?? []) as Item[];
+
+  const routines = items.filter((i) => i.recurrence_days?.length && i.recurrence_start_time);
+  if (routines.length === 0) return 0;
+
+  const routineKeys = new Set(
+    routines.map((r) => `${r.title.trim().toLowerCase()}|${r.recurrence_start_time}`)
+  );
+
+  const toDelete = items.filter((item) => {
+    if (item.source !== "google_sync") return false;
+    if (item.recurrence_days?.length) return false;
+    if (!item.start_time) return false;
+    const hhmm = extractHHMM(item.start_time);
+    if (!hhmm) return false;
+    return routineKeys.has(`${item.title.trim().toLowerCase()}|${hhmm}`);
+  });
+
+  if (toDelete.length === 0) return 0;
+
+  let count = 0;
+  for (const item of toDelete) {
+    if (item.notion_page_id) {
+      const matchKey = (() => {
+        const hhmm = extractHHMM(item.start_time!);
+        return hhmm ? `${item.title.trim().toLowerCase()}|${hhmm}` : null;
+      })();
+      const routine = matchKey
+        ? routines.find((r) => `${r.title.trim().toLowerCase()}|${r.recurrence_start_time}` === matchKey)
+        : undefined;
+      if (!routine?.notion_page_id || routine.notion_page_id !== item.notion_page_id) {
+        try {
+          const token = await getNotionAccessToken(userId);
+          await archiveItemNotionPage(token, item.notion_page_id);
+        } catch {
+          // Si falla el archivo de Notion, igual borramos el ítem local
+        }
+      }
+    }
+    await supabase.from("items").delete().eq("id", item.id);
+    count++;
+  }
+
+  return count;
+}
+
+/**
  * Busca tareas con el mismo título y la misma fecha/hora de inicio y las
- * junta en una sola: conserva la que tenga más información llena (o la más
- * antigua si hay un empate) y le copia los datos que le faltaban de las
- * demás. Borra las filas sobrantes y limpia su evento de Google / página de
- * Notion si eran distintos a los que se quedó la tarea conservada (para que
- * no se vuelvan a importar como "nuevos" en la próxima sincronización).
+ * junta en una sola, conservando la que tenga más información llena.
  */
 async function mergeDuplicateItems(userId: string): Promise<number> {
   const supabase = createServiceRoleClient();
@@ -360,10 +591,6 @@ async function mergeDuplicateItems(userId: string): Promise<number> {
 
   const groups = new Map<string, Item[]>();
   for (const item of items) {
-    // Prioridad 1: rutinas de la app (recurrence_days no vacío) → mismo título + días.
-    // Prioridad 2: mismo google_event_id → misma serie recurrente importada de Google
-    //   (distintas ocurrencias del mismo RRULE quedaron como ítems separados antes del fix).
-    // Prioridad 3: mismo título + fecha/hora exacta (normalizada a UTC).
     const key =
       routineDuplicateKey(item) ??
       (item.google_event_id ? `gid|${item.google_event_id}` : null) ??
@@ -390,7 +617,9 @@ async function mergeDuplicateItems(userId: string): Promise<number> {
   for (const group of groups.values()) {
     if (group.length < 2) continue;
 
-    const sorted = [...group].sort((a, b) => richness(b) - richness(a) || a.created_at.localeCompare(b.created_at));
+    const sorted = [...group].sort(
+      (a, b) => richness(b) - richness(a) || a.created_at.localeCompare(b.created_at)
+    );
     const [keeper, ...rest] = sorted;
 
     const patch: Record<string, unknown> = {};

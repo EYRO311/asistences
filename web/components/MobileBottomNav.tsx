@@ -2,15 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  IconHome,
+  IconCalendar,
+  IconCalendarMonth,
+  IconClipboardList,
+} from "@tabler/icons-react";
+import type { TablerIcon } from "@/lib/itemPresentation";
 
-const LINKS = [
-  { href: "/", icon: "🏠", label: "Inicio" },
-  { href: "/semana", icon: "📅", label: "Semana" },
+const LINKS: { href: string; Icon: TablerIcon; label: string }[] = [
+  { href: "/", Icon: IconHome as TablerIcon, label: "Inicio" },
+  { href: "/semana", Icon: IconCalendar as TablerIcon, label: "Semana" },
 ];
 
-const LINKS_RIGHT = [
-  { href: "/mes", icon: "🗓️", label: "Mes" },
-  { href: "/tareas", icon: "📋", label: "Tareas" },
+const LINKS_RIGHT: { href: string; Icon: TablerIcon; label: string }[] = [
+  { href: "/mes", Icon: IconCalendarMonth as TablerIcon, label: "Mes" },
+  { href: "/tareas", Icon: IconClipboardList as TablerIcon, label: "Tareas" },
 ];
 
 export function MobileBottomNav() {
@@ -21,7 +28,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border-soft bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border-soft bg-surface pb-[env(safe-area-inset-bottom)] xs:hidden">
       <div className="relative mx-auto flex h-16 max-w-md items-center justify-between px-6">
         {LINKS.map((link) => (
           <Link
@@ -31,7 +38,7 @@ export function MobileBottomNav() {
               isActive(link.href) ? "text-foreground" : "text-muted"
             }`}
           >
-            <span className="text-lg leading-none">{link.icon}</span>
+            <link.Icon size={22} stroke={1.5} aria-hidden />
             {link.label}
           </Link>
         ))}
@@ -53,7 +60,7 @@ export function MobileBottomNav() {
               isActive(link.href) ? "text-foreground" : "text-muted"
             }`}
           >
-            <span className="text-lg leading-none">{link.icon}</span>
+            <link.Icon size={22} stroke={1.5} aria-hidden />
             {link.label}
           </Link>
         ))}

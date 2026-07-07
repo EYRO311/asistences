@@ -413,7 +413,7 @@ export function SettingsForm({
                         : "border-border-soft hover:bg-surface"
                     }`}
                   >
-                    <span aria-hidden>{opt.icon}</span>
+                    <opt.Icon size={14} aria-hidden />
                     {opt.label}
                   </button>
                 ))}

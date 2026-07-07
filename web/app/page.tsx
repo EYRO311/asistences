@@ -4,17 +4,28 @@ import type { Item, Profile } from "@/lib/types";
 import Link from "next/link";
 import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS } from "@/lib/itemPresentation";
 import { GmailInbox } from "@/components/GmailInbox";
+import {
+  IconSun,
+  IconSunHigh,
+  IconCloud,
+  IconCloudRain,
+  IconCloudStorm,
+  IconSnowflake,
+  IconMist,
+  IconShirt,
+} from "@tabler/icons-react";
 
 // ── Weather helpers ─────────────────────────────────────────────────────────
 
-function weatherEmoji(desc: string): string {
-  if (desc.includes("tormenta")) return "⛈️";
-  if (desc.includes("nieve")) return "❄️";
-  if (desc.includes("lluvia") || desc.includes("llovizna")) return "🌧️";
-  if (desc.includes("neblina")) return "🌫️";
-  if (desc.includes("nublado")) return "☁️";
-  if (desc.includes("parcialmente")) return "🌤️";
-  return "☀️";
+function WeatherIcon({ desc, size = 48 }: { desc: string; size?: number }) {
+  const props = { size, stroke: 1.5, "aria-hidden": true } as const;
+  if (desc.includes("tormenta")) return <IconCloudStorm {...props} />;
+  if (desc.includes("nieve")) return <IconSnowflake {...props} />;
+  if (desc.includes("lluvia") || desc.includes("llovizna")) return <IconCloudRain {...props} />;
+  if (desc.includes("neblina")) return <IconMist {...props} />;
+  if (desc.includes("nublado")) return <IconCloud {...props} />;
+  if (desc.includes("parcialmente")) return <IconSunHigh {...props} />;
+  return <IconSun {...props} />;
 }
 
 function weatherTip(w: DailyWeather): string | null {
@@ -196,7 +207,7 @@ export default async function HomePage() {
         <div className="rounded-xl border border-border-soft bg-surface p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-5xl leading-none">{weatherEmoji(weather.description)}</span>
+              <WeatherIcon desc={weather.description} />
               <div>
                 <p className="text-xs text-muted mb-0.5">{locationName}</p>
                 <p className="text-2xl font-semibold">
@@ -231,7 +242,7 @@ export default async function HomePage() {
       {/* ── Outfit del día ── */}
       {outfitCard && (
         <div className="rounded-xl border border-border-soft bg-surface p-4 flex gap-3">
-          <span className="text-2xl leading-none shrink-0 mt-0.5">👔</span>
+          <IconShirt size={28} stroke={1.5} className="shrink-0 mt-0.5" aria-hidden />
           <div className="min-w-0">
             <p className="text-xs text-muted mb-1">
               {firstName ? `Para ti hoy, ${firstName}` : "Para hoy"} · {outfitCard.item.title}

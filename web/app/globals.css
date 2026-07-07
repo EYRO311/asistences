@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme {
+  --breakpoint-xs: 25rem;    /* 400px — límite inferior de hamburguesa */
+  --breakpoint-nav: 62.5rem; /* 1000px — límite superior de hamburguesa / inicio de nav completa */
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
@@ -36,6 +41,30 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-soft) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-soft);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 /* Sileo toast: fix description text contrast */

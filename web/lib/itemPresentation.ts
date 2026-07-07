@@ -1,4 +1,14 @@
 import type { Category, Effort, Item, ItemType, PreferredTransport, Priority, TaskStatus } from "@/lib/types";
+import { IconCar, IconBike, IconBus, IconWalk } from "@tabler/icons-react";
+import type { FC, CSSProperties } from "react";
+
+export type TablerIcon = FC<{
+  size?: number | string;
+  stroke?: number | string;
+  className?: string;
+  style?: CSSProperties;
+  "aria-hidden"?: boolean | "true" | "false";
+}>;
 
 export const TYPE_LABELS: Record<ItemType, string> = {
   compromiso: "Compromiso",
@@ -24,11 +34,11 @@ export const TASK_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "listo", label: "Listo" },
 ];
 
-export const TRANSPORT_OPTIONS: { value: PreferredTransport; label: string; icon: string }[] = [
-  { value: "car", label: "Auto", icon: "🚗" },
-  { value: "bike", label: "Bici", icon: "🚲" },
-  { value: "public_transport", label: "Transporte público", icon: "🚌" },
-  { value: "walking", label: "A pie", icon: "🚶" },
+export const TRANSPORT_OPTIONS: { value: PreferredTransport; label: string; Icon: TablerIcon }[] = [
+  { value: "car", label: "Auto", Icon: IconCar as TablerIcon },
+  { value: "bike", label: "Bici", Icon: IconBike as TablerIcon },
+  { value: "public_transport", label: "Transporte público", Icon: IconBus as TablerIcon },
+  { value: "walking", label: "A pie", Icon: IconWalk as TablerIcon },
 ];
 
 export const CATEGORY_OPTIONS: Category[] = [
@@ -166,6 +176,18 @@ export function formatTimeRange(item: Item): string {
 }
 
 export function formatDateRange(item: Item): string {
+  // Rutinas recurrentes: mostrar el horario semanal ("Lun a Vie, 09:00–18:00")
+  if (item.recurrence_days?.length && item.recurrence_start_time && item.recurrence_end_time) {
+    const sorted = [...item.recurrence_days].sort((a, b) => a - b);
+    const labelOf = (d: number) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label ?? String(d);
+    const isContiguous = sorted.every((d, i) => i === 0 || d === sorted[i - 1] + 1);
+    const daysText =
+      isContiguous && sorted.length > 1
+        ? `${labelOf(sorted[0])} a ${labelOf(sorted[sorted.length - 1])}`
+        : sorted.map(labelOf).join(", ");
+    return `${daysText}, ${item.recurrence_start_time}–${item.recurrence_end_time}`;
+  }
+
   if (!item.start_time) return "Sin fecha";
 
   const start = new Date(item.start_time);

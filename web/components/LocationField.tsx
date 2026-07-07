@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { sileo } from "sileo";
+import { IconMapPin } from "@tabler/icons-react";
 
 interface Suggestion {
   display: string;
@@ -156,7 +157,7 @@ export function LocationField({
           disabled={detecting}
           className="shrink-0 whitespace-nowrap rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
         >
-          {detecting ? "Detectando..." : "📍 Usar mi ubicación"}
+          {detecting ? "Detectando..." : <><IconMapPin size={14} className="inline -mt-0.5" aria-hidden /> Usar mi ubicación</>}
         </button>
       </div>
 

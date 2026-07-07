@@ -6,6 +6,7 @@ import type { Item } from "@/lib/types";
 import { DeleteItemButton } from "@/components/DeleteItemButton";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { TYPE_BADGE_COLORS, TYPE_LABELS, STATUS_LABELS, formatDateRange } from "@/lib/itemPresentation";
+import { IconShirt } from "@tabler/icons-react";
 
 export function ItemList({ items }: { items: Item[] }) {
   const [selected, setSelected] = useState<Item | null>(null);
@@ -40,8 +41,8 @@ export function ItemList({ items }: { items: Item[] }) {
                 <p className="text-sm text-foreground/80 line-clamp-2">{item.description}</p>
               )}
               {item.outfit_suggestion && (
-                <p className="text-sm text-muted">
-                  <span aria-hidden>👕 </span>
+                <p className="flex items-start gap-1 text-sm text-muted">
+                  <IconShirt size={14} className="shrink-0 mt-0.5" aria-hidden />
                   {item.outfit_suggestion}
                 </p>
               )}

@@ -12,7 +12,7 @@ export interface DayFreeSlot {
 }
 
 /** Devuelve la fecha local "YYYY-MM-DD" para un instante UTC en la zona dada. */
-function toLocalDateStr(utcDate: Date, tz: string): string {
+export function toLocalDateStr(utcDate: Date, tz: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(utcDate);
 }
 
@@ -32,7 +32,7 @@ function isoWeekday(dateStr: string): number {
  * estándar y es inmune a la mayoría de las transiciones de horario de verano
  * porque la corrección se calcula en el mismo instante en que se aplica.
  */
-function wallToUTC(dateStr: string, timeStr: string, tz: string): Date {
+export function wallToUTC(dateStr: string, timeStr: string, tz: string): Date {
   const [h, m] = timeStr.split(":").map(Number);
   const naive = new Date(
     Date.UTC(

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { fetchBusyIntervals, getValidGoogleAccessToken } from "@/lib/google";
-import { computeFreeSlots } from "@/lib/freeSlots";
+import { computeFreeSlots, wallToUTC, toLocalDateStr } from "@/lib/freeSlots";
 import type { Item, Profile } from "@/lib/types";
 
 const querySchema = z.object({
@@ -63,45 +63,45 @@ export async function GET(request: NextRequest) {
       if (!msg.includes("no tiene conectada")) throw err;
     }
 
-    // Intervalos extra: tareas en Supabase sin evento de Google Calendar
-    const { data: itemsRaw } = await service
+    // Traer TODOS los items del usuario y filtrar en JS para evitar
+    // problemas con combinaciones de filtros de Supabase.
+    const { data: allItemsRaw } = await service
       .from("items")
-      .select("start_time, end_time, recurrence_days, recurrence_start_time, recurrence_end_time")
-      .eq("user_id", user.id)
-      .is("google_event_id", null)
-      .not("start_time", "is", null);
+      .select("start_time, end_time, recurrence_days, recurrence_start_time, recurrence_end_time, google_event_id, source")
+      .eq("user_id", user.id);
 
-    const items = (itemsRaw ?? []) as Pick<
-      Item,
-      "start_time" | "end_time" | "recurrence_days" | "recurrence_start_time" | "recurrence_end_time"
-    >[];
+    type RawItem = Pick<Item, "start_time" | "end_time" | "recurrence_days" | "recurrence_start_time" | "recurrence_end_time" | "google_event_id" | "source">;
+    const items = (allItemsRaw ?? []) as RawItem[];
 
     const extraBusy: { start: Date; end: Date }[] = [];
 
     for (const item of items) {
-      if (!item.start_time) continue;
+      const days: number[] = Array.isArray(item.recurrence_days) ? item.recurrence_days.map(Number) : [];
+      const isRoutine = days.length > 0 && item.recurrence_start_time && item.recurrence_end_time;
 
-      if (item.recurrence_days?.length && item.recurrence_start_time && item.recurrence_end_time) {
-        const [startH, startM] = item.recurrence_start_time.split(":").map(Number);
-        const [endH, endM] = item.recurrence_end_time.split(":").map(Number);
+      if (isRoutine) {
+        // Rutina recurrente: expandir cada ocurrencia en el rango con el timezone correcto.
+        // Se incluye SIEMPRE (con o sin google_event_id) para que funcione aunque
+        // Google Calendar no esté conectado.
         const cursor = new Date(timeMin);
         cursor.setUTCHours(0, 0, 0, 0);
 
         while (cursor < timeMax) {
-          const jsWeekday = cursor.getUTCDay();
-          const isoWeekday = jsWeekday === 0 ? 7 : jsWeekday;
-          if (item.recurrence_days.includes(isoWeekday)) {
-            const occStart = new Date(cursor);
-            occStart.setUTCHours(startH, startM, 0, 0);
-            const occEnd = new Date(cursor);
-            occEnd.setUTCHours(endH, endM, 0, 0);
+          const localDateStr = toLocalDateStr(cursor, tz);
+          const jsDay = new Date(localDateStr + "T12:00:00Z").getUTCDay();
+          const isoWeekday = jsDay === 0 ? 7 : jsDay;
+
+          if (days.includes(isoWeekday)) {
+            const occStart = wallToUTC(localDateStr, item.recurrence_start_time!, tz);
+            const occEnd = wallToUTC(localDateStr, item.recurrence_end_time!, tz);
             if (occEnd > occStart) {
               extraBusy.push({ start: occStart, end: occEnd });
             }
           }
           cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
-      } else {
+      } else if (!item.google_event_id && item.start_time) {
+        // Evento puntual no sincronizado con Google Calendar
         const start = new Date(item.start_time);
         const end = item.end_time
           ? new Date(item.end_time)
