@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { sileo } from "sileo";
 import type { CachedRecommendation, Item, PreferredTransport, TravelEstimate } from "@/lib/types";
@@ -28,6 +28,7 @@ import {
   IconSparkles,
   IconRefresh,
   IconX,
+  IconChevronDown,
 } from "@tabler/icons-react";
 
 // ── Travel block ─────────────────────────────────────────────────────────────
@@ -42,7 +43,12 @@ function TravelBlock({
   const modes = [
     { key: "car" as const, Icon: IconCar as TablerIcon, label: "Auto", data: travel.car },
     { key: "bike" as const, Icon: IconBike as TablerIcon, label: "Bici", data: travel.bike },
-    { key: "public_transport" as const, Icon: IconBus as TablerIcon, label: "Transporte público", data: travel.publicTransport },
+    {
+      key: "public_transport" as const,
+      Icon: IconBus as TablerIcon,
+      label: "Transporte público",
+      data: travel.publicTransport,
+    },
     {
       key: "walking" as const,
       Icon: IconWalk as TablerIcon,
@@ -63,7 +69,7 @@ function TravelBlock({
         Cómo llegar ({travel.distanceKm} km)
       </p>
       <div className="rounded-md bg-surface border border-foreground/20 px-3 py-2">
-        <p className="font-semibold flex items-center gap-1.5 font-handwriting text-base">
+        <p className="font-semibold font-handwriting text-base flex items-center gap-1.5">
           <activeMode.Icon size={14} aria-hidden />
           {activeMode.label}
         </p>
@@ -75,7 +81,7 @@ function TravelBlock({
             <p className="font-medium text-foreground/80 flex items-center gap-1">
               <IconCar size={12} aria-hidden /> Didi / Uber
             </p>
-            <p className="text-xs text-muted">
+            <p className="font-handwriting text-sm text-muted">
               {travel.rideshare.minutes} min — sal {travel.rideshare.leaveMinutesBefore} min antes ·{" "}
               est. ${travel.rideshare.costRangeMXN[0]}–${travel.rideshare.costRangeMXN[1]} MXN
             </p>
@@ -101,17 +107,17 @@ function TravelBlock({
 function RecommendationsInline({
   itemId,
   initial,
+  selectedTransport,
   onLoad,
 }: {
   itemId: string;
   initial: CachedRecommendation | null;
+  selectedTransport: PreferredTransport | null;
   onLoad?: (data: CachedRecommendation) => void;
 }) {
   const [data, setData] = useState<CachedRecommendation | null>(initial);
   const [loading, setLoading] = useState(false);
-  const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(
-    initial?.preferredTransport ?? null
-  );
+  const prevTransport = useRef(selectedTransport);
 
   async function load(refresh = false, transport?: PreferredTransport | null) {
     setLoading(true);
@@ -125,7 +131,6 @@ function RecommendationsInline({
       if (!res.ok) throw new Error(json.error ?? "Error");
       setData(json);
       onLoad?.(json);
-      setSelectedTransport(json.preferredTransport ?? transport ?? null);
     } catch (e) {
       sileo.error({
         title: "Error",
@@ -136,76 +141,48 @@ function RecommendationsInline({
     }
   }
 
-  function handleTransportClick(value: PreferredTransport) {
-    const next = value === selectedTransport ? null : value;
-    setSelectedTransport(next);
-    if (data) load(true, next);
-  }
-
-  const transportSelector = (
-    <div className="flex flex-wrap gap-1">
-      {TRANSPORT_OPTIONS.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          disabled={loading}
-          onClick={() => handleTransportClick(opt.value)}
-          className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors disabled:opacity-50 ${
-            selectedTransport === opt.value
-              ? "border-foreground bg-foreground text-background"
-              : "border-border-soft hover:bg-surface"
-          }`}
-        >
-          <opt.Icon size={11} aria-hidden />
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
+  // Auto-reload when transport changes from the dropdown (only if data already loaded)
+  useEffect(() => {
+    if (prevTransport.current !== selectedTransport) {
+      prevTransport.current = selectedTransport;
+      if (data) load(true, selectedTransport);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTransport]);
 
   if (!data && !loading) {
     return (
-      <div className="space-y-2">
-        {transportSelector}
-        <button
-          type="button"
-          onClick={() => load(false, selectedTransport)}
-          className="w-full flex items-center justify-center gap-1.5 rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface"
-        >
-          <IconSparkles size={13} aria-hidden /> Cargar recomendaciones
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => load(false, selectedTransport)}
+        className="w-full flex items-center justify-center gap-1.5 rounded-md border border-border-soft px-3 py-2 text-sm hover:bg-surface"
+      >
+        <IconSparkles size={13} aria-hidden /> Cargar recomendaciones
+      </button>
     );
   }
 
   if (loading) {
-    return (
-      <div className="space-y-2">
-        {transportSelector}
-        <p className="text-sm text-muted">Consultando clima, rutas y generando recomendaciones…</p>
-      </div>
-    );
+    return <p className="text-sm text-muted">Consultando clima, rutas y generando recomendaciones…</p>;
   }
 
   if (!data) return null;
 
-  const transportChanged = selectedTransport !== (data.preferredTransport ?? null);
-
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Transporte</p>
+        <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">
+          Recomendaciones
+        </p>
         <button
           type="button"
           onClick={() => load(true, selectedTransport)}
           className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
         >
           <IconRefresh size={11} aria-hidden />
-          {transportChanged ? "Recalcular" : "Actualizar"}
+          Actualizar
         </button>
       </div>
-
-      {transportSelector}
 
       {data.location && (
         <p className="flex items-center gap-1 text-sm text-muted">
@@ -241,9 +218,11 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
   const taskStatusLabel = TASK_STATUS_OPTIONS.find((s) => s.value === item.task_status)?.label;
 
   const [recData, setRecData] = useState<CachedRecommendation | null>(item.cached_recommendation ?? null);
+  const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(
+    item.cached_recommendation?.preferredTransport ?? null
+  );
 
-  const hasKeypoints =
-    taskStatusLabel || priorityLabel || effortLabel || item.categories?.length > 0 || item.outfit_suggestion || item.meet_link;
+  const activeTransportOpt = TRANSPORT_OPTIONS.find((o) => o.value === selectedTransport);
 
   return (
     <div
@@ -257,7 +236,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
       >
         {/* ── HEADER: Topic | Date ── */}
         <div className="flex shrink-0 border-b border-border-soft">
-          {/* Topic */}
           <div className="flex-1 min-w-0 px-4 pt-3 pb-3 border-r border-border-soft">
             <p className="text-[9px] font-semibold text-muted uppercase tracking-widest mb-1.5">
               Topic
@@ -272,7 +250,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
             </div>
           </div>
 
-          {/* Date + close */}
           <div className="w-36 md:w-44 shrink-0 px-4 pt-3 pb-3">
             <div className="flex items-start justify-between mb-1.5">
               <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Date</p>
@@ -296,10 +273,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
             <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">
               Questions / keypoints
             </p>
-
-            {!hasKeypoints && (
-              <p className="text-[11px] text-muted italic">Sin datos adicionales.</p>
-            )}
 
             {/* Status / priority / effort */}
             {(taskStatusLabel || priorityLabel || effortLabel) && (
@@ -336,17 +309,44 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               </div>
             )}
 
-            {/* Cuando hay recomendaciones: transporte, ubicación y clima compactos */}
-            {recData ? (
-              <div className="space-y-2">
-                {recData.preferredTransport && (
-                  <div className="flex items-center gap-1 text-[11px] text-muted">
-                    {(() => {
-                      const opt = TRANSPORT_OPTIONS.find((o) => o.value === recData.preferredTransport);
-                      return opt ? <><opt.Icon size={12} aria-hidden /> {opt.label}</> : null;
-                    })()}
-                  </div>
+            {/* Transport dropdown */}
+            <div className="space-y-1">
+              <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">
+                Transporte
+              </p>
+              <div className="relative">
+                {/* Icon overlay */}
+                {activeTransportOpt && (
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2">
+                    <activeTransportOpt.Icon size={11} aria-hidden />
+                  </span>
                 )}
+                <select
+                  value={selectedTransport ?? ""}
+                  onChange={(e) =>
+                    setSelectedTransport((e.target.value as PreferredTransport) || null)
+                  }
+                  className="w-full appearance-none rounded border border-border-soft bg-transparent py-1 pr-5 text-[11px] text-foreground/80 cursor-pointer focus:outline-none focus:border-foreground/40"
+                  style={{ paddingLeft: activeTransportOpt ? "1.5rem" : "0.375rem" }}
+                >
+                  <option value="">Seleccionar</option>
+                  {TRANSPORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <IconChevronDown
+                  size={10}
+                  className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-muted"
+                  aria-hidden
+                />
+              </div>
+            </div>
+
+            {/* Location + weather (compact, shown once recommendations load) */}
+            {recData && (
+              <div className="space-y-2">
                 {recData.location && (
                   <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
                     <IconMapPin size={11} className="shrink-0 mt-0.5" aria-hidden />
@@ -364,14 +364,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
                   </div>
                 )}
               </div>
-            ) : (
-              /* Sin recomendaciones: mostrar outfit guardado */
-              item.outfit_suggestion && (
-                <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
-                  <IconShirt size={12} className="shrink-0 mt-0.5" aria-hidden />
-                  <span>{item.outfit_suggestion}</span>
-                </div>
-              )
             )}
 
             {/* Meet link */}
@@ -398,7 +390,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
           >
             <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Notes</p>
 
-            {/* Location */}
             {item.location && (
               <p className="flex items-start gap-1 text-sm text-muted">
                 <IconMapPin size={14} className="shrink-0 mt-0.5" aria-hidden />
@@ -406,7 +397,6 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               </p>
             )}
 
-            {/* Description */}
             {item.description && (
               <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
                 {item.description}
@@ -417,11 +407,11 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
               <p className="text-sm text-muted italic">Sin notas.</p>
             )}
 
-            {/* Recommendations */}
             <div className="border-t border-border-soft pt-3">
               <RecommendationsInline
                 itemId={item.id}
                 initial={item.cached_recommendation ?? null}
+                selectedTransport={selectedTransport}
                 onLoad={setRecData}
               />
             </div>
