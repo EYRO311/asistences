@@ -26,6 +26,20 @@ function toLocalInputValue(date: Date) {
   return local.toISOString().slice(0, 16);
 }
 
+function fixMidnightISO(iso: string | undefined): string | undefined {
+  if (!iso) return iso;
+  const d = new Date(iso);
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
+    d.setUTCHours(23, 59, 0, 0);
+    return d.toISOString();
+  }
+  return iso;
+}
+
+function fixMidnightTime(time: string): string {
+  return time === "00:00" ? "23:59" : time;
+}
+
 interface Props {
   onClose: () => void;
   onCreated: () => void;
@@ -87,10 +101,10 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
         endISO = occ.end.toISOString();
         recDays = recurrenceDays;
         recStart = recurrenceStartTime;
-        recEnd = recurrenceEndTime;
+        recEnd = fixMidnightTime(recurrenceEndTime);
       } else {
         startISO = new Date(startTime).toISOString();
-        endISO = new Date(endTime).toISOString();
+        endISO = fixMidnightISO(new Date(endTime).toISOString());
       }
 
       const itemData = {
@@ -106,7 +120,7 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
         google_event_id: null,
         notion_page_id: null,
         notion_url: null,
-        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        due_date: dueDate ? fixMidnightISO(new Date(dueDate).toISOString()) ?? null : null,
         priority: priority ?? null,
         effort: effort ?? null,
         task_status: taskStatus,
