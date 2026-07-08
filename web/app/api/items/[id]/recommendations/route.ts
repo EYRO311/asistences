@@ -25,20 +25,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     transportParam && (VALID_TRANSPORTS as readonly string[]).includes(transportParam)
       ? (transportParam as ValidTransport)
       : null;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Auth: cookie session (web) OR Bearer token (mobile app)
+  const service = createServiceRoleClient();
+  let userId: string | undefined;
+  const authHeader = request.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const { data } = await service.auth.getUser(authHeader.slice(7));
+    userId = data.user?.id;
+  } else {
+    const cookieSupabase = await createClient();
+    const { data: { user } } = await cookieSupabase.auth.getUser();
+    userId = user?.id;
+  }
 
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  const { data: item, error: itemError } = await supabase
+  const { data: item, error: itemError } = await service
     .from("items")
     .select("*")
     .eq("id", id)
+    .eq("user_id", userId)
     .single<Item>();
 
   if (itemError || !item) {
@@ -49,10 +58,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json(item.cached_recommendation);
   }
 
-  const { data: profile } = await supabase
+  const { data: profile } = await service
     .from("profiles")
     .select("location, preferred_transport, extra_buffer_minutes, full_name, age, gender")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single<Pick<Profile, "location" | "preferred_transport" | "extra_buffer_minutes" | "full_name" | "age" | "gender">>();
 
   const originText = profile?.location || null;
@@ -117,7 +126,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     preferredTransport: effectiveTransport ?? null,
   };
 
-  const service = createServiceRoleClient();
   await service.from("items").update({ cached_recommendation: result }).eq("id", id);
 
   return NextResponse.json(result);
