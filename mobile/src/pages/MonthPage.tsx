@@ -4,6 +4,7 @@ import { occurrenceForDate } from "@/lib/recurrence";
 import { TYPE_BADGE_COLORS, TYPE_DOT_COLORS } from "@/lib/itemPresentation";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { AppHeader } from "@/components/AppHeader";
+import { getDisplayTimezone } from "@/lib/timezone";
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -140,8 +141,8 @@ export function MonthPage({ items, onSettings, onSync, syncing, pendingCount, on
                       <p className="text-sm font-medium leading-snug">{item.title}</p>
                       {item.start_time && !item.all_day && (
                         <p className="text-xs text-muted mt-0.5">
-                          {new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.start_time))}
-                          {item.end_time && ` – ${new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.end_time))}`}
+                          {new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: getDisplayTimezone() }).format(new Date(item.start_time))}
+                          {item.end_time && ` – ${new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: getDisplayTimezone() }).format(new Date(item.end_time))}`}
                         </p>
                       )}
                     </div>

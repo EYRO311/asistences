@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { deleteItem, SagaError } from "@/lib/saga/createItem";
+import { fixMidnightISO, fixMidnightTime } from "@/lib/normalizeTime";
 import { getValidGoogleAccessToken, updateCalendarEvent } from "@/lib/google";
 import { getNotionAccessToken, updateItemNotionPage } from "@/lib/notion";
 import { suggestOutfitForNotion } from "@/lib/gemini";
@@ -57,6 +58,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const patchData = {
+    ...parsed.data,
+    end_time: fixMidnightISO(parsed.data.end_time) as string | undefined,
+    due_date: fixMidnightISO(parsed.data.due_date) as string | undefined,
+    recurrence_end_time: fixMidnightTime(parsed.data.recurrence_end_time) as string | undefined,
+  };
+
   const service = createServiceRoleClient();
 
   const { data: existing, error: fetchError } = await service
@@ -75,12 +83,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   // no requieren volver a quemar tokens de Gemini ni recalcular clima/rutas.
   const RECOMMENDATION_FIELDS = ["title", "description", "location", "start_time"] as const;
   const affectsRecommendations = RECOMMENDATION_FIELDS.some(
-    (f) => f in parsed.data && parsed.data[f as keyof typeof parsed.data] !== existing[f]
+    (f) => f in patchData && patchData[f as keyof typeof patchData] !== existing[f]
   );
 
   const { data: updated, error: updateError } = await service
     .from("items")
-    .update({ ...parsed.data, ...(affectsRecommendations ? { cached_recommendation: null } : {}) })
+    .update({ ...patchData, ...(affectsRecommendations ? { cached_recommendation: null } : {}) })
     .eq("id", id)
     .select("*")
     .single<Item>();

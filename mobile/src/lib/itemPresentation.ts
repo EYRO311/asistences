@@ -1,6 +1,7 @@
 import type { Category, Effort, Item, ItemType, PreferredTransport, Priority, TaskStatus } from "@/lib/types";
 import { IconCar, IconBike, IconBus, IconWalk } from "@tabler/icons-react";
 import type { FC, CSSProperties } from "react";
+import { getDisplayTimezone } from "@/lib/timezone";
 
 export type TablerIcon = FC<{
   size?: number | string;
@@ -166,13 +167,11 @@ export function formatTimeRange(item: Item): string {
   if (!item.start_time) return "Sin fecha";
   if (item.all_day) return "Todo el día";
 
-  const start = new Date(item.start_time);
-  const timeFormatter = new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" });
+  const tz = getDisplayTimezone();
+  const fmt = new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: tz });
 
-  if (!item.end_time) return timeFormatter.format(start);
-
-  const end = new Date(item.end_time);
-  return `${timeFormatter.format(start)} - ${timeFormatter.format(end)}`;
+  if (!item.end_time) return fmt.format(new Date(item.start_time));
+  return `${fmt.format(new Date(item.start_time))} - ${fmt.format(new Date(item.end_time))}`;
 }
 
 export function formatDateRange(item: Item): string {
@@ -190,6 +189,7 @@ export function formatDateRange(item: Item): string {
 
   if (!item.start_time) return "Sin fecha";
 
+  const tz = getDisplayTimezone();
   const start = new Date(item.start_time);
   const formatter = new Intl.DateTimeFormat("es-MX", {
     weekday: "short",
@@ -197,6 +197,7 @@ export function formatDateRange(item: Item): string {
     month: "short",
     hour: item.all_day ? undefined : "2-digit",
     minute: item.all_day ? undefined : "2-digit",
+    timeZone: tz,
   });
 
   if (!item.end_time) return formatter.format(start);
@@ -205,5 +206,6 @@ export function formatDateRange(item: Item): string {
   return `${formatter.format(start)} - ${new Intl.DateTimeFormat("es-MX", {
     hour: item.all_day ? undefined : "2-digit",
     minute: item.all_day ? undefined : "2-digit",
+    timeZone: tz,
   }).format(end)}`;
 }

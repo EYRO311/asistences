@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { Item, PreferredTransport, TravelEstimate } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import type { CachedRecommendation, Item, PreferredTransport, TravelEstimate } from "@/lib/types";
 import {
   TYPE_BADGE_COLORS,
   TYPE_LABELS,
@@ -10,13 +10,18 @@ import {
   TRANSPORT_OPTIONS,
   formatDateRange,
 } from "@/lib/itemPresentation";
+import { supabase } from "@/lib/supabase";
+import { upsertItem } from "@/db/items";
 import {
   IconX,
   IconChevronDown,
   IconMapPin,
   IconCompass,
   IconSunHigh,
+  IconSparkles,
 } from "@tabler/icons-react";
+
+const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
 
 // Picks the best travel mode to show: preferred first, then car as default
 function getTravelMode(travel: TravelEstimate, preferred: PreferredTransport | null | undefined) {
@@ -33,11 +38,45 @@ function getTravelMode(travel: TravelEstimate, preferred: PreferredTransport | n
 export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => void }) {
   const [keypointsOpen, setKeypointsOpen] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [liveRec, setLiveRec] = useState<CachedRecommendation | null>(item.cached_recommendation ?? null);
+  const [fetchingRec, setFetchingRec] = useState(false);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setVisible(true));
     return () => cancelAnimationFrame(raf);
   }, []);
+
+  // Genera la recomendación la primera vez que se abre el modal si no existe
+  useEffect(() => {
+    if (liveRec || fetchedRef.current) return;
+    fetchedRef.current = true;
+
+    async function generate() {
+      setFetchingRec(true);
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+
+        const res = await fetch(`${WEB_URL}/api/items/${item.id}/recommendations`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+
+        const rec: CachedRecommendation = await res.json();
+        setLiveRec(rec);
+        // Persiste en SQLite local para que esté disponible offline
+        await upsertItem({ ...item, cached_recommendation: rec }).catch(() => {});
+      } catch {
+        // recomendaciones son opcionales, no bloqueamos el modal
+      } finally {
+        setFetchingRec(false);
+      }
+    }
+
+    generate();
+  }, [item.id]);
 
   function close() {
     setVisible(false);
@@ -49,7 +88,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
   const taskStatusLabel = TASK_STATUS_OPTIONS.find((s) => s.value === item.task_status)?.label;
   const hasKeypoints = !!priorityLabel || !!effortLabel || !!taskStatusLabel || item.categories?.length > 0;
 
-  const rec = item.cached_recommendation ?? null;
+  const rec = liveRec;
   const { mode: travelMode, data: travelData } = rec?.travel
     ? getTravelMode(rec.travel, rec.preferredTransport)
     : { mode: null, data: null };
@@ -159,6 +198,14 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
             </p>
           ) : (
             !item.location && <p className="text-sm text-muted italic">Sin notas.</p>
+          )}
+
+          {/* ── Generando recomendación ──────────────────────────────── */}
+          {fetchingRec && (
+            <div className="flex items-center gap-2 text-muted text-sm">
+              <IconSparkles size={14} className="shrink-0 animate-pulse" aria-hidden />
+              <span>Generando recomendación...</span>
+            </div>
           )}
 
           {/* ── Viaje: sal X min antes ───────────────────────────────── */}

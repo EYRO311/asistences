@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createItem, SagaError } from "@/lib/saga/createItem";
+import { fixMidnightISO, fixMidnightTime } from "@/lib/normalizeTime";
 
 const createItemSchema = z.object({
   type: z.enum(["compromiso", "personal", "evento"]),
@@ -64,7 +65,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const item = await createItem(user.id, parsed.data);
+    const data = {
+      ...parsed.data,
+      end_time: fixMidnightISO(parsed.data.end_time) as string | undefined,
+      due_date: fixMidnightISO(parsed.data.due_date) as string | undefined,
+      recurrence_end_time: fixMidnightTime(parsed.data.recurrence_end_time) as string | undefined,
+    };
+    const item = await createItem(user.id, data);
     return NextResponse.json({ item }, { status: 201 });
   } catch (err) {
     if (err instanceof SagaError) {

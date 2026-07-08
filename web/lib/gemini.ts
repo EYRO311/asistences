@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { Gender } from "@/lib/types";
 
-const DEFAULT_MODEL = "gemini-3.5-flash";
+const DEFAULT_MODEL = "gemini-2.0-flash";
 
 export interface UserProfile {
   name?: string | null;
@@ -43,8 +43,8 @@ export async function suggestOutfit(title: string, description?: string | null):
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const interaction = await ai.interactions.create({ model, input: prompt });
-    return interaction.output_text?.trim() || null;
+    const response = await ai.models.generateContent({ model, contents: prompt });
+    return response.text?.trim() || null;
   } catch (err) {
     console.error("Gemini suggestOutfit failed:", err);
     return null;
@@ -96,8 +96,8 @@ export async function suggestOutfitForNotion(
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const interaction = await ai.interactions.create({ model, input: prompt });
-    return interaction.output_text?.trim() || null;
+    const response = await ai.models.generateContent({ model, contents: prompt });
+    return response.text?.trim() || null;
   } catch (err) {
     console.error("Gemini suggestOutfitForNotion failed:", err);
     return null;
@@ -174,8 +174,8 @@ export async function getRecommendations(context: RecommendationContext): Promis
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const interaction = await ai.interactions.create({ model, input: prompt });
-    return interaction.output_text?.trim() || null;
+    const response = await ai.models.generateContent({ model, contents: prompt });
+    return response.text?.trim() || null;
   } catch (err) {
     console.error("Gemini getRecommendations failed:", err);
     return null;
