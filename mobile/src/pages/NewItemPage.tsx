@@ -9,7 +9,7 @@ import {
   WEEKDAY_OPTIONS,
 } from "@/lib/itemPresentation";
 import { nextOccurrence } from "@/lib/recurrence";
-import { createLocalItem } from "@/db/items";
+import { createLocalItem, updateLocalItem } from "@/db/items";
 import { supabase } from "@/lib/supabase";
 import { Network } from "@capacitor/network";
 import { IconX } from "@tabler/icons-react";
@@ -94,7 +94,12 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
       let recStart: string | undefined;
       let recEnd: string | undefined;
 
-      if (showWorkSchedule && recurrenceDays.length > 0) {
+      if (showWorkSchedule) {
+        if (recurrenceDays.length === 0) {
+          setError("Selecciona al menos un día para la rutina");
+          setLoading(false);
+          return;
+        }
         const occ = nextOccurrence(recurrenceDays, recurrenceStartTime, recurrenceEndTime);
         if (!occ) throw new Error("Horario inválido");
         startISO = occ.start.toISOString();
@@ -135,13 +140,17 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
         recurrence_end_time: recEnd ?? null,
       };
 
-      // Always save locally first
+      // Always save locally first (status = draft)
       const newItem = await createLocalItem(itemData);
 
-      // If online, also push to Supabase immediately
+      // If online, push to Supabase and mark as confirmed
       const networkStatus = await Network.getStatus();
       if (networkStatus.connected) {
-        await supabase.from("items").upsert({ ...newItem });
+        const { error: upsertError } = await supabase.from("items").upsert({ ...newItem });
+        if (!upsertError) {
+          await supabase.from("items").update({ status: "confirmed" }).eq("id", newItem.id);
+          await updateLocalItem(newItem.id, { status: "confirmed" });
+        }
       }
 
       onCreated();

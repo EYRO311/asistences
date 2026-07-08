@@ -28,7 +28,10 @@ export async function pushToSupabase(): Promise<void> {
     try {
       if (entry.operation === "create") {
         const item = JSON.parse(entry.payload as string);
-        await supabase.from("items").upsert(item);
+        const { error } = await supabase.from("items").upsert(item);
+        if (error) throw error;
+        // Mobile items are confirmed once they reach Supabase
+        await supabase.from("items").update({ status: "confirmed" }).eq("id", entry.item_id);
       } else if (entry.operation === "update") {
         const changes = JSON.parse(entry.payload as string);
         await supabase.from("items").update(changes).eq("id", entry.item_id);
@@ -54,6 +57,11 @@ export async function forceSyncAll(userId: string): Promise<void> {
   if (items.length > 0) {
     const { error } = await supabase.from("items").upsert(items);
     if (error) throw error;
+    // Confirm all draft items that made it to Supabase
+    const draftIds = items.filter((i) => i.status === "draft").map((i) => i.id);
+    if (draftIds.length > 0) {
+      await supabase.from("items").update({ status: "confirmed" }).in("id", draftIds);
+    }
   }
 
   const db = await getDb();
