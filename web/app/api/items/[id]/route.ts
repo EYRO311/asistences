@@ -150,17 +150,22 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .single<Pick<Profile, "notion_database_id" | "location">>();
 
       if (profile?.notion_database_id) {
-        // La columna "vestimenta" de Notion sí valida contra clima/ubicación;
-        // la sugerencia simple (sin clima) solo se usa dentro de la app.
-        const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
-          updated.location ?? profile.location ?? null,
-          updated.start_time
-        ).catch(() => ({ location: updated.location ?? profile.location ?? null, weather: null }));
+        // Solo re-genera la sugerencia de vestimenta para Notion si el outfit
+        // acaba de generarse (era null) o si cambiaron campos de contenido.
+        // En cualquier otro caso reutiliza el que ya existe para no gastar tokens.
+        let notionOutfitSuggestion = outfitSuggestion;
+        const outfitWasNull = !existing.outfit_suggestion;
+        if (outfitWasNull || affectsRecommendations) {
+          const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
+            updated.location ?? profile.location ?? null,
+            updated.start_time
+          ).catch(() => ({ location: updated.location ?? profile.location ?? null, weather: null }));
 
-        const notionOutfitSuggestion =
-          (await suggestOutfitForNotion(updated.title, updated.description, resolvedLocation, weather).catch(
-            () => null
-          )) ?? outfitSuggestion;
+          notionOutfitSuggestion =
+            (await suggestOutfitForNotion(updated.title, updated.description, resolvedLocation, weather).catch(
+              () => null
+            )) ?? outfitSuggestion;
+        }
 
         const notionToken = await getNotionAccessToken(user.id);
         await updateItemNotionPage(notionToken, updated.notion_page_id, profile.notion_database_id, updated, {
