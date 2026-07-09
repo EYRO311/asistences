@@ -1,7 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import type { Gender } from "@/lib/types";
 
-const DEFAULT_MODEL = "gemini-2.0-flash";
+// Primary model from env, then fallback chain in order
+const DEFAULT_MODEL = "gemini-2.5-flash";
+const FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"];
 
 export interface UserProfile {
   name?: string | null;
@@ -21,6 +23,34 @@ function userProfileLine(profile?: UserProfile | null): string | null {
   return parts.length ? `Usuario: ${parts.join(", ")}.` : null;
 }
 
+// Tries the configured model first; if it fails (quota/rate limit), falls back
+// through FALLBACK_MODELS until one works or all fail.
+async function generateWithFallback(apiKey: string, prompt: string): Promise<string | null> {
+  const primaryModel = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  for (const model of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({ model, contents: prompt });
+      const text = response.text?.trim();
+      if (text) return text;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // 429 = quota/rate limit → try next model; anything else → stop
+      if (!msg.includes('"code":429') && !msg.includes("429") && !msg.includes("RESOURCE_EXHAUSTED")) {
+        console.error(`Gemini [${model}] failed (non-quota):`, msg.slice(0, 200));
+        return null;
+      }
+      console.warn(`Gemini [${model}] quota exceeded, trying next model...`);
+    }
+  }
+
+  console.error("Gemini: all models exhausted or quota exceeded.");
+  return null;
+}
+
 /**
  * Sugiere brevemente qué tipo de vestimenta es apropiada para una tarea,
  * analizando su título y descripción con Gemini. Es un "extra": si falla
@@ -29,8 +59,6 @@ function userProfileLine(profile?: UserProfile | null): string | null {
 export async function suggestOutfit(title: string, description?: string | null): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
-
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
   const prompt = [
     "Sugiere en máximo 12 palabras qué tipo de vestimenta usar para esta tarea/evento.",
@@ -41,14 +69,7 @@ export async function suggestOutfit(title: string, description?: string | null):
     .filter(Boolean)
     .join("\n");
 
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({ model, contents: prompt });
-    return response.text?.trim() || null;
-  } catch (err) {
-    console.error("Gemini suggestOutfit failed:", err);
-    return null;
-  }
+  return generateWithFallback(apiKey, prompt);
 }
 
 export interface WeatherSummary {
@@ -74,8 +95,6 @@ export async function suggestOutfitForNotion(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-
   const prompt = [
     "Sugiere en máximo 15 palabras qué tipo de vestimenta usar para esta tarea/evento,",
     "tomando en cuenta el clima y la ubicación si los tengo disponibles (ej. si va a llover o hace frío, dilo).",
@@ -94,14 +113,7 @@ export async function suggestOutfitForNotion(
     .filter(Boolean)
     .join("\n");
 
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({ model, contents: prompt });
-    return response.text?.trim() || null;
-  } catch (err) {
-    console.error("Gemini suggestOutfitForNotion failed:", err);
-    return null;
-  }
+  return generateWithFallback(apiKey, prompt);
 }
 
 export interface RecommendationContext {
@@ -134,8 +146,6 @@ export interface RecommendationContext {
 export async function getRecommendations(context: RecommendationContext): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
-
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
   const prompt = [
     "Da recomendaciones breves (máximo 5-6 líneas) de vestimenta, qué llevar, y cómo/cuándo salir",
@@ -172,12 +182,5 @@ export async function getRecommendations(context: RecommendationContext): Promis
     .filter(Boolean)
     .join("\n");
 
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({ model, contents: prompt });
-    return response.text?.trim() || null;
-  } catch (err) {
-    console.error("Gemini getRecommendations failed:", err);
-    return null;
-  }
+  return generateWithFallback(apiKey, prompt);
 }
