@@ -3,18 +3,13 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getRecommendations } from "@/lib/gemini";
 import { geocodeLocation, getDailyWeather } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
-import type { CachedRecommendation, Item, Profile } from "@/lib/types";
+import { decrypt } from "@/lib/crypto";
+import type { Item, Profile, Recommendation } from "@/lib/types";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-/**
- * Genera recomendaciones (vestimenta + clima + ubicación + cómo llegar) para
- * una tarea. Se cachea en `items.cached_recommendation` para no volver a
- * llamar a Gemini/clima/rutas cada vez que se abre el modal — solo se
- * recalcula si la tarea se edita (lo invalida el PATCH) o si no hay cache.
- */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
@@ -26,7 +21,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ? (transportParam as ValidTransport)
       : null;
 
-  // Auth: cookie session (web) OR Bearer token (mobile app)
+  // Auth: cookie session (web) OR Bearer token (mobile)
   const service = createServiceRoleClient();
   let userId: string | undefined;
   const authHeader = request.headers.get("Authorization");
@@ -54,8 +49,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Item no encontrado" }, { status: 404 });
   }
 
-  if (item.cached_recommendation && !forceRefresh) {
-    return NextResponse.json(item.cached_recommendation);
+  // Desencripta campos sensibles del item para usarlos en el prompt de Gemini
+  const itemLocation = decrypt(item.location);
+  const itemDescription = decrypt(item.description);
+
+  // Busca recomendación existente en la nueva tabla
+  const { data: existing } = await service
+    .from("recommendations")
+    .select("*")
+    .eq("item_id", id)
+    .single<Recommendation>();
+
+  if (existing && !forceRefresh) {
+    return NextResponse.json({
+      recommendation: existing.full_text,
+      outfit_suggestion: existing.outfit_brief,
+      location: existing.location_name,
+      weather: existing.weather,
+      travel: existing.travel,
+      preferredTransport: existing.preferred_transport,
+    });
   }
 
   const { data: profile } = await service
@@ -64,8 +77,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .eq("id", userId)
     .single<Pick<Profile, "location" | "preferred_transport" | "extra_buffer_minutes" | "full_name" | "age" | "gender">>();
 
-  const originText = profile?.location || null;
-  const destinationText = item.location || originText;
+  const originText = profile?.location ?? null;
+  const destinationText = itemLocation ?? originText;
   const extraBuffer = profile?.extra_buffer_minutes ?? 0;
 
   let destination = null;
@@ -79,16 +92,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // Solo calcula trayecto si la tarea tiene una ubicación propia distinta a
-  // la del usuario (si no, ya está "ahí", no hay traslado que sugerir).
-  const hasDistinctDestination = Boolean(item.location && originText && item.location.trim() !== originText.trim());
+  const hasDistinctDestination = Boolean(
+    itemLocation && originText && itemLocation.trim() !== originText.trim()
+  );
 
   if (hasDistinctDestination && destination && originText) {
     const origin = await geocodeLocation(originText);
     if (origin && (origin.latitude !== destination.latitude || origin.longitude !== destination.longitude)) {
       const raw = await estimateTravel(origin, destination).catch(() => null);
       if (raw && extraBuffer > 0) {
-        // Suma el buffer personal del usuario a cada modo de transporte.
         travel = {
           distanceKm: raw.distanceKm,
           car: { minutes: raw.car.minutes, leaveMinutesBefore: raw.car.leaveMinutesBefore + extraBuffer },
@@ -106,9 +118,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const effectiveTransport = transportOverride ?? profile?.preferred_transport ?? undefined;
 
-  const recommendation = await getRecommendations({
+  const fullText = await getRecommendations({
     title: item.title,
-    description: item.description,
+    description: itemDescription,
     locationName: destination?.name ?? destinationText,
     originName: originText,
     weather,
@@ -117,16 +129,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     userProfile: profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null,
   });
 
-  const result: CachedRecommendation = {
-    recommendation,
+  const locationName = destination?.name ?? destinationText;
+
+  // Guarda o actualiza en la tabla recommendations
+  await service.from("recommendations").upsert(
+    {
+      item_id: id,
+      outfit_brief: item.outfit_suggestion,
+      full_text: fullText,
+      location_name: locationName,
+      weather,
+      travel,
+      preferred_transport: effectiveTransport ?? null,
+      generated_at: new Date().toISOString(),
+    },
+    { onConflict: "item_id" }
+  );
+
+  return NextResponse.json({
+    recommendation: fullText,
     outfit_suggestion: item.outfit_suggestion,
-    location: destination?.name ?? destinationText,
+    location: locationName,
     weather,
     travel,
     preferredTransport: effectiveTransport ?? null,
-  };
-
-  await service.from("items").update({ cached_recommendation: result }).eq("id", id);
-
-  return NextResponse.json(result);
+  });
 }

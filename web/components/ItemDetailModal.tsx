@@ -319,10 +319,8 @@ function KeypointsPanel({
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => void }) {
-  const [recData, setRecData] = useState<CachedRecommendation | null>(item.cached_recommendation ?? null);
-  const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(
-    item.cached_recommendation?.preferredTransport ?? null
-  );
+  const [recData, setRecData] = useState<CachedRecommendation | null>(null);
+  const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(null);
   const [keypointsOpen, setKeypointsOpen] = useState(false);
 
   return (
@@ -446,7 +444,7 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
             <div className="border-t border-border-soft pt-3">
               <RecommendationsInline
                 itemId={item.id}
-                initial={item.cached_recommendation ?? null}
+                initial={null}
                 selectedTransport={selectedTransport}
                 onLoad={setRecData}
               />

@@ -16,7 +16,6 @@ export interface TravelModeEstimate {
 export interface RideshareEstimate {
   minutes: number;
   leaveMinutesBefore: number;
-  /** Rango de costo estimado en MXN [mín, máx] — orientativo, varía por ciudad y hora. */
   costRangeMXN: [number, number];
 }
 
@@ -28,6 +27,10 @@ export interface TravelEstimate {
   rideshare?: RideshareEstimate;
 }
 
+// ── Recommendations ───────────────────────────────────────────────────────────
+
+// Alias de compatibilidad con componentes existentes — refleja la respuesta
+// que devuelven los endpoints de recomendaciones (misma forma que antes)
 export interface CachedRecommendation {
   recommendation: string | null;
   outfit_suggestion: string | null;
@@ -42,12 +45,40 @@ export interface CachedRecommendation {
   preferredTransport?: PreferredTransport | null;
 }
 
+export interface Recommendation {
+  id: string;
+  item_id: string | null;
+  outfit_brief: string | null;   // solo ropa, mostrar en tarjeta
+  full_text: string | null;      // recomendación completa
+  location_name: string | null;
+  weather: {
+    description: string;
+    tempMaxC: number;
+    tempMinC: number;
+    precipitationProbability: number;
+  } | null;
+  travel: TravelEstimate | null;
+  preferred_transport: PreferredTransport | null;
+  generated_at: string;
+}
+
+export interface GoalRecommendation {
+  id: string;
+  user_id: string;
+  recurrence_type: GoalRecurrence;
+  outfit_brief: string | null;
+  full_text: string | null;
+  generated_at: string;
+}
+
+// ── Items ─────────────────────────────────────────────────────────────────────
+
 export interface Item {
   id: string;
   user_id: string;
   type: ItemType;
   title: string;
-  description: string | null;
+  description: string | null;   // encriptado en BD, desencriptado en app
   start_time: string | null;
   end_time: string | null;
   all_day: boolean;
@@ -56,21 +87,61 @@ export interface Item {
   google_event_id: string | null;
   notion_page_id: string | null;
   notion_url: string | null;
-  due_date: string | null;
   priority: Priority | null;
   effort: Effort | null;
   task_status: TaskStatus;
   categories: Category[];
   outfit_suggestion: string | null;
-  location: string | null;
+  location: string | null;      // encriptado en BD, desencriptado en app
   source: ItemSource;
-  cached_recommendation: CachedRecommendation | null;
   meet_link: string | null;
-  recurrence_days: number[]; // 1=lunes ... 7=domingo
-  recurrence_start_time: string | null; // "HH:mm"
-  recurrence_end_time: string | null; // "HH:mm"
+  recurrence_days: number[];
+  recurrence_start_time: string | null;
+  recurrence_end_time: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── Goals ─────────────────────────────────────────────────────────────────────
+
+export type GoalRecurrence = "none" | "daily" | "weekly" | "monthly";
+export type GoalStatus = "active" | "completed" | "archived";
+
+export interface Goal {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;   // encriptado en BD, desencriptado en app
+  due_date: string | null;      // solo para type 'none' (meta única con fecha límite)
+  recurrence_type: GoalRecurrence;
+  status: GoalStatus;
+  categories: Category[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GoalItem {
+  id: string;
+  goal_id: string;
+  title: string;                // encriptado en BD, desencriptado en app
+  completed: boolean;
+  completed_at: string | null;
+  reset_at: string | null;
+  order_index: number;
+  created_at: string;
+}
+
+export interface CreateGoalInput {
+  title: string;
+  description?: string;
+  due_date?: string;
+  recurrence_type: GoalRecurrence;
+  categories?: Category[];
+}
+
+export interface CreateGoalItemInput {
+  title: string;
+  order_index?: number;
 }
 
 export type PreferredTransport = "car" | "bike" | "public_transport" | "walking";
@@ -118,7 +189,6 @@ export interface CreateItemInput {
   end_time?: string;
   all_day?: boolean;
   add_to_calendar?: boolean;
-  due_date?: string;
   priority?: Priority;
   effort?: Effort;
   task_status?: TaskStatus;

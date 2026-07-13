@@ -608,7 +608,6 @@ async function mergeDuplicateItems(userId: string): Promise<number> {
       i.effort,
       i.categories?.length ? "x" : null,
       i.location,
-      i.due_date,
       i.outfit_suggestion,
     ].filter(Boolean).length;
 
@@ -631,7 +630,6 @@ async function mergeDuplicateItems(userId: string): Promise<number> {
         patch.categories = other.categories;
       }
       if (!keeper.location && other.location) patch.location = other.location;
-      if (!keeper.due_date && other.due_date) patch.due_date = other.due_date;
       if (!keeper.outfit_suggestion && other.outfit_suggestion) patch.outfit_suggestion = other.outfit_suggestion;
       if (!keeper.google_event_id && other.google_event_id) patch.google_event_id = other.google_event_id;
       if (!keeper.notion_page_id && other.notion_page_id) {

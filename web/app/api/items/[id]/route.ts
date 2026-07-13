@@ -7,6 +7,7 @@ import { getValidGoogleAccessToken, updateCalendarEvent } from "@/lib/google";
 import { getNotionAccessToken, updateItemNotionPage } from "@/lib/notion";
 import { suggestOutfitForNotion } from "@/lib/gemini";
 import { resolveLocationAndWeather } from "@/lib/weather";
+import { encrypt, decrypt } from "@/lib/crypto";
 import type { Item, Profile } from "@/lib/types";
 
 const updateItemSchema = z.object({
@@ -15,7 +16,6 @@ const updateItemSchema = z.object({
   start_time: z.string().datetime().optional(),
   end_time: z.string().datetime().optional(),
   all_day: z.boolean().optional(),
-  due_date: z.string().datetime().optional(),
   priority: z.enum(["alta", "media", "baja"]).optional(),
   effort: z.enum(["pequeno", "media", "grande"]).optional(),
   task_status: z.enum(["sin_empezar", "en_curso", "listo"]).optional(),
@@ -60,8 +60,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const patchData = {
     ...parsed.data,
+    ...(parsed.data.description !== undefined ? { description: encrypt(parsed.data.description) } : {}),
+    ...(parsed.data.location !== undefined ? { location: encrypt(parsed.data.location) } : {}),
     end_time: fixMidnightISO(parsed.data.end_time) as string | undefined,
-    due_date: fixMidnightISO(parsed.data.due_date) as string | undefined,
     recurrence_end_time: fixMidnightTime(parsed.data.recurrence_end_time) as string | undefined,
   };
 
@@ -88,7 +89,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const { data: updated, error: updateError } = await service
     .from("items")
-    .update({ ...patchData, ...(affectsRecommendations ? { cached_recommendation: null } : {}) })
+    .update(patchData)
     .eq("id", id)
     .select("*")
     .single<Item>();
@@ -96,6 +97,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (updateError || !updated) {
     return NextResponse.json({ error: updateError?.message ?? "No se pudo actualizar" }, { status: 500 });
   }
+
+  // Si cambiaron campos de contenido, invalida la recomendación cacheada
+  if (affectsRecommendations) {
+    await service.from("recommendations").delete().eq("item_id", id);
+  }
+
+  // Desencripta para uso en servicios externos y respuesta
+  const plainDescription = decrypt(updated.description);
+  const plainLocation = decrypt(updated.location);
 
   // Si a la tarea le falta la vestimenta sugerida (p. ej. se importó por
   // sincronización, o falló al crearla), la generamos ahora al guardar con clima.
@@ -107,11 +117,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .eq("id", user.id)
       .single<Pick<Profile, "location" | "full_name" | "age" | "gender">>();
     const { location: resolvedLoc, weather: outfitWeather } = await resolveLocationAndWeather(
-      updated.location ?? profileForOutfit?.location ?? null,
+      plainLocation ?? profileForOutfit?.location ?? null,
       updated.start_time
-    ).catch(() => ({ location: updated.location ?? null, weather: null }));
+    ).catch(() => ({ location: plainLocation ?? null, weather: null }));
     outfitSuggestion = await suggestOutfitForNotion(
-      updated.title, updated.description, resolvedLoc, outfitWeather,
+      updated.title, plainDescription, resolvedLoc, outfitWeather,
       profileForOutfit ? { name: profileForOutfit.full_name, age: profileForOutfit.age, gender: profileForOutfit.gender } : null
     ).catch(() => null);
     if (outfitSuggestion) {
@@ -133,7 +143,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const accessToken = await getValidGoogleAccessToken(user.id);
       await updateCalendarEvent(accessToken, updated.google_event_id, {
         title: updated.title,
-        description: updated.description ?? undefined,
+        description: plainDescription ?? undefined,
         start: updated.start_time!,
         end: updated.end_time!,
         allDay: updated.all_day,
@@ -157,12 +167,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         const outfitWasNull = !existing.outfit_suggestion;
         if (outfitWasNull || affectsRecommendations) {
           const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
-            updated.location ?? profile.location ?? null,
+            plainLocation ?? profile.location ?? null,
             updated.start_time
-          ).catch(() => ({ location: updated.location ?? profile.location ?? null, weather: null }));
+          ).catch(() => ({ location: plainLocation ?? profile.location ?? null, weather: null }));
 
           notionOutfitSuggestion =
-            (await suggestOutfitForNotion(updated.title, updated.description, resolvedLocation, weather).catch(
+            (await suggestOutfitForNotion(updated.title, plainDescription, resolvedLocation, weather).catch(
               () => null
             )) ?? outfitSuggestion;
         }
@@ -181,7 +191,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await service.from("items").update({ status: syncStatus }).eq("id", id);
   }
 
-  return NextResponse.json({ item: { ...updated, status: syncStatus } });
+  return NextResponse.json({
+    item: {
+      ...updated,
+      description: plainDescription,
+      location: plainLocation,
+      status: syncStatus,
+    },
+  });
 }
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {

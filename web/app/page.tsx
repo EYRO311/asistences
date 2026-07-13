@@ -122,11 +122,7 @@ function pickOutfitItem(todayItems: Item[]): { item: Item; outfitText: string } 
     ...todayItems.filter((i) => i.recurrence_days?.length),
   ];
   for (const item of sorted) {
-    const text =
-      item.cached_recommendation?.recommendation ??
-      item.outfit_suggestion ??
-      item.cached_recommendation?.outfit_suggestion ??
-      null;
+    const text = item.outfit_suggestion ?? null;
     if (text) return { item, outfitText: text };
   }
   return null;
@@ -447,14 +443,8 @@ export default async function HomePage() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{item.title}</p>
-                    {item.due_date && (
-                      <p className="text-xs text-muted">
-                        Vence{" "}
-                        {new Date(item.due_date).toLocaleDateString("es-MX", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
+                    {item.outfit_suggestion && (
+                      <p className="text-xs text-muted truncate">{item.outfit_suggestion}</p>
                     )}
                   </div>
                   {priorityOpt && (
