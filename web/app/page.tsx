@@ -3,6 +3,7 @@ import { geocodeLocation, getDailyWeather, type DailyWeather } from "@/lib/weath
 import type { Item, Profile } from "@/lib/types";
 import Link from "next/link";
 import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS } from "@/lib/itemPresentation";
+import { GoalList, type GoalRow } from "@/components/GoalList";
 import { GmailInbox } from "@/components/GmailInbox";
 import {
   IconSun,
@@ -198,6 +199,15 @@ export default async function HomePage() {
         (PRIORITY_ORDER[a.priority ?? ""] ?? 3) - (PRIORITY_ORDER[b.priority ?? ""] ?? 3)
     )
     .slice(0, 6);
+
+  // Goals (active, up to 4)
+  const { data: goalsRaw } = await supabase
+    .from("goals")
+    .select("id, title, due_date, recurrence_type, goal_items(id, completed)")
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(4);
+  const activeGoals = (goalsRaw ?? []) as GoalRow[];
 
   // Weather
   let weather: DailyWeather | null = null;
@@ -410,6 +420,19 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      {/* ── Metas activas ── */}
+      {activeGoals.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-medium">Mis metas</h2>
+            <Link href="/metas" className="text-xs text-muted hover:text-foreground">
+              Ver todas →
+            </Link>
+          </div>
+          <GoalList goals={activeGoals} />
+        </section>
+      )}
 
       {/* ── Pendientes ── */}
       {pending.length > 0 && (
