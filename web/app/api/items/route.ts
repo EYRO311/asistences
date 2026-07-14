@@ -3,8 +3,6 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createItem, SagaError } from "@/lib/saga/createItem";
 import { fixMidnightISO, fixMidnightTime } from "@/lib/normalizeTime";
-import { decrypt } from "@/lib/crypto";
-import type { Item } from "@/lib/types";
 
 const createItemSchema = z.object({
   type: z.enum(["compromiso", "personal", "evento"]),
@@ -44,13 +42,7 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const items = (data as Item[]).map((item) => ({
-    ...item,
-    description: decrypt(item.description),
-    location: decrypt(item.location),
-  }));
-
-  return NextResponse.json({ items });
+  return NextResponse.json({ items: data });
 }
 
 export async function POST(request: NextRequest) {

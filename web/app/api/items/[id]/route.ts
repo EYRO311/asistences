@@ -7,7 +7,7 @@ import { getValidGoogleAccessToken, updateCalendarEvent } from "@/lib/google";
 import { getNotionAccessToken, updateItemNotionPage } from "@/lib/notion";
 import { suggestOutfitForNotion } from "@/lib/gemini";
 import { resolveLocationAndWeather } from "@/lib/weather";
-import { encrypt, decrypt } from "@/lib/crypto";
+import { decrypt } from "@/lib/crypto";
 import type { Item, Profile } from "@/lib/types";
 
 const updateItemSchema = z.object({
@@ -58,10 +58,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // description y location llegan ya encriptados desde el cliente (AES-256-GCM).
+  // El backend los almacena tal cual y solo los desencripta internamente.
   const patchData = {
     ...parsed.data,
-    ...(parsed.data.description !== undefined ? { description: encrypt(parsed.data.description) } : {}),
-    ...(parsed.data.location !== undefined ? { location: encrypt(parsed.data.location) } : {}),
     end_time: fixMidnightISO(parsed.data.end_time) as string | undefined,
     recurrence_end_time: fixMidnightTime(parsed.data.recurrence_end_time) as string | undefined,
   };
@@ -79,13 +79,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Item no encontrado" }, { status: 404 });
   }
 
-  // Solo invalida la caché si cambiaron campos que afectan las recomendaciones
-  // (título, descripción, ubicación, fecha). Cambios en prioridad/estado/etc.
-  // no requieren volver a quemar tokens de Gemini ni recalcular clima/rutas.
-  const RECOMMENDATION_FIELDS = ["title", "description", "location", "start_time"] as const;
-  const affectsRecommendations = RECOMMENDATION_FIELDS.some(
-    (f) => f in patchData && patchData[f as keyof typeof patchData] !== existing[f]
-  );
+  // Solo invalida la caché si cambiaron campos que afectan las recomendaciones.
+  // Para description/location se comparan los valores desencriptados (el cliente
+  // manda con IV nuevo cada vez, generando un ciphertext distinto aunque el
+  // texto sea igual — comparar cifrados daría falsos positivos siempre).
+  const affectsRecommendations = (["title", "description", "location", "start_time"] as const).some((f) => {
+    if (!(f in patchData)) return false;
+    const newVal = patchData[f as keyof typeof patchData] as string | null | undefined;
+    const oldVal = existing[f as keyof typeof existing] as string | null | undefined;
+    if (f === "description" || f === "location") {
+      return decrypt(newVal ?? null) !== decrypt(oldVal ?? null);
+    }
+    return newVal !== oldVal;
+  });
 
   const { data: updated, error: updateError } = await service
     .from("items")
@@ -192,12 +198,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   return NextResponse.json({
-    item: {
-      ...updated,
-      description: plainDescription,
-      location: plainLocation,
-      status: syncStatus,
-    },
+    item: { ...updated, status: syncStatus },
   });
 }
 

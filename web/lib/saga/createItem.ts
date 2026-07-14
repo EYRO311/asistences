@@ -12,7 +12,7 @@ import {
 import { suggestOutfitForNotion, getRecommendations } from "@/lib/gemini";
 import { resolveLocationAndWeather, geocodeLocation, getDailyWeather } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
-import { encrypt, decrypt } from "@/lib/crypto";
+import { decrypt } from "@/lib/crypto";
 import type { CreateItemInput, Item, Profile } from "@/lib/types";
 
 const TYPES_WITH_CALENDAR_BY_DEFAULT = new Set(["compromiso", "evento"]);
@@ -58,7 +58,7 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
       user_id: userId,
       type: input.type,
       title: input.title,
-      description: encrypt(input.description ?? null),
+      description: input.description ?? null,
       start_time: input.start_time ?? null,
       end_time: input.end_time ?? null,
       all_day: input.all_day ?? false,
@@ -68,7 +68,7 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
       effort: input.effort ?? null,
       task_status: input.task_status ?? "sin_empezar",
       categories: input.categories ?? [],
-      location: encrypt(input.location ?? null),
+      location: input.location ?? null,
       recurrence_days: input.recurrence_days ?? [],
       recurrence_start_time: input.recurrence_start_time ?? null,
       recurrence_end_time: input.recurrence_end_time ?? null,

@@ -15,6 +15,7 @@ import { WorkSchedulePicker } from "@/components/WorkSchedulePicker";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { nextOccurrence } from "@/lib/recurrence";
 import { sileo } from "sileo";
+import { encryptClient } from "@/lib/crypto-client";
 
 // ── Modo de creación ──────────────────────────────────────────────────────────
 type CreationMode = "tarea" | "meta" | "rutina";
@@ -168,9 +169,9 @@ export default function NewItemPage() {
         const payload: Record<string, unknown> = {
           type: "personal",
           title,
-          description: description || undefined,
+          description: description ? await encryptClient(description) : undefined,
           categories,
-          location: routineLocation || undefined,
+          location: routineLocation ? await encryptClient(routineLocation) : undefined,
           recurrence_days: recurrenceDays,
           recurrence_start_time: recurrenceStartTime,
           recurrence_end_time: recurrenceEndTime,
@@ -195,12 +196,12 @@ export default function NewItemPage() {
       const payload: Record<string, unknown> = {
         type: itemSubtype,
         title,
-        description: description || undefined,
+        description: description ? await encryptClient(description) : undefined,
         all_day: allDay,
         add_to_calendar: addToCalendar,
         task_status: taskStatus,
         categories,
-        location: location || undefined,
+        location: location ? await encryptClient(location) : undefined,
         start_time: new Date(startTime).toISOString(),
         end_time: new Date(endTime).toISOString(),
       };
