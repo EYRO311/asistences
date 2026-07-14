@@ -9,9 +9,10 @@ import {
   createItemNotionPage,
   getNotionAccessToken,
 } from "@/lib/notion";
-import { suggestOutfitForNotion } from "@/lib/gemini";
-import { resolveLocationAndWeather } from "@/lib/weather";
-import { encrypt, decrypt } from "@/lib/crypto";
+import { suggestOutfitForNotion, getRecommendations } from "@/lib/gemini";
+import { resolveLocationAndWeather, geocodeLocation, getDailyWeather } from "@/lib/weather";
+import { estimateTravel } from "@/lib/travel";
+import { decrypt } from "@/lib/crypto";
 import type { CreateItemInput, Item, Profile } from "@/lib/types";
 
 const TYPES_WITH_CALENDAR_BY_DEFAULT = new Set(["compromiso", "evento"]);
@@ -57,7 +58,7 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
       user_id: userId,
       type: input.type,
       title: input.title,
-      description: encrypt(input.description ?? null),
+      description: input.description ?? null,
       start_time: input.start_time ?? null,
       end_time: input.end_time ?? null,
       all_day: input.all_day ?? false,
@@ -67,7 +68,7 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
       effort: input.effort ?? null,
       task_status: input.task_status ?? "sin_empezar",
       categories: input.categories ?? [],
-      location: encrypt(input.location ?? null),
+      location: input.location ?? null,
       recurrence_days: input.recurrence_days ?? [],
       recurrence_start_time: input.recurrence_start_time ?? null,
       recurrence_end_time: input.recurrence_end_time ?? null,
@@ -124,18 +125,21 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
     // --- Paso 3: crear página en Notion (si está configurado y conectado) ---
     const { data: profile } = await supabase
       .from("profiles")
-      .select("notion_database_id, location, full_name, age, gender")
+      .select("notion_database_id, location, full_name, age, gender, preferred_transport, extra_buffer_minutes")
       .eq("id", userId)
-      .single<Pick<Profile, "notion_database_id" | "location" | "full_name" | "age" | "gender">>();
+      .single<Pick<Profile, "notion_database_id" | "location" | "full_name" | "age" | "gender" | "preferred_transport" | "extra_buffer_minutes">>();
+
+    // Resuelve ubicación y clima una vez — se reutiliza en Notion y en la recomendación
+    const originText = profile?.location ?? null;
+    const destinationText = plainLocation ?? originText;
+    const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
+      destinationText,
+      item.start_time
+    ).catch(() => ({ location: destinationText, weather: null }));
 
     if (profile?.notion_database_id) {
       try {
         const userProfile = { name: profile.full_name, age: profile.age, gender: profile.gender };
-
-        const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
-          plainLocation ?? profile.location ?? null,
-          item.start_time
-        ).catch(() => ({ location: plainLocation ?? profile.location ?? null, weather: null }));
 
         outfitSuggestion = await suggestOutfitForNotion(
           item.title, plainDescription, resolvedLocation, weather, userProfile
@@ -149,9 +153,14 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
         notionUrl = result.url;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "";
-        // Si no tiene Notion conectado lo saltamos; otros errores sí fallan
         if (!msg.includes("no tiene conectada")) throw err;
       }
+    } else if (destinationText) {
+      // Sin Notion: igualmente genera el outfit para mostrarlo en la app
+      outfitSuggestion = await suggestOutfitForNotion(
+        item.title, plainDescription, resolvedLocation, weather,
+        profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null
+      ).catch(() => null);
     }
 
     // --- Paso 4: confirmar ---
@@ -172,6 +181,21 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
       throw new SagaError("supabase_confirm", confirmError?.message ?? "No se pudo confirmar el item");
     }
 
+    // --- Paso 5: generar recomendación completa y guardarla (best-effort, no revierte) ---
+    generateAndSaveRecommendation(supabase, confirmedItem.id, {
+      title: confirmedItem.title,
+      description: plainDescription,
+      originText,
+      destinationText,
+      resolvedLocation,
+      weather,
+      startTime: confirmedItem.start_time,
+      outfitBrief: outfitSuggestion,
+      preferredTransport: profile?.preferred_transport ?? null,
+      extraBuffer: profile?.extra_buffer_minutes ?? 0,
+      userProfile: profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null,
+    }).catch(() => null);
+
     return confirmedItem;
   } catch (err) {
     // --- Compensación: revertir todo lo creado hasta el momento ---
@@ -180,6 +204,83 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
     if (err instanceof SagaError) throw err;
     throw new SagaError("unknown", err instanceof Error ? err.message : "Error desconocido en la saga");
   }
+}
+
+// Genera la recomendación completa (clima + traslado + IA) y la guarda en la
+// tabla recommendations. Se llama fire-and-forget después de confirmar el item;
+// si falla no afecta la creación del item.
+async function generateAndSaveRecommendation(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  itemId: string,
+  ctx: {
+    title: string;
+    description: string | null;
+    originText: string | null;
+    destinationText: string | null;
+    resolvedLocation: string | null;
+    weather: Awaited<ReturnType<typeof getDailyWeather>> | null;
+    startTime: string | null;
+    outfitBrief: string | null;
+    preferredTransport: string | null;
+    extraBuffer: number;
+    userProfile: import("@/lib/gemini").UserProfile | null;
+  }
+): Promise<void> {
+  let travel = null;
+
+  const hasDistinctDestination = Boolean(
+    ctx.destinationText && ctx.originText && ctx.destinationText.trim() !== ctx.originText.trim()
+  );
+
+  if (hasDistinctDestination && ctx.destinationText && ctx.originText) {
+    const [dest, orig] = await Promise.all([
+      geocodeLocation(ctx.destinationText),
+      geocodeLocation(ctx.originText),
+    ]);
+    if (dest && orig) {
+      const raw = await estimateTravel(orig, dest).catch(() => null);
+      if (raw && ctx.extraBuffer > 0) {
+        travel = {
+          distanceKm: raw.distanceKm,
+          car: { minutes: raw.car.minutes, leaveMinutesBefore: raw.car.leaveMinutesBefore + ctx.extraBuffer },
+          bike: { minutes: raw.bike.minutes, leaveMinutesBefore: raw.bike.leaveMinutesBefore + ctx.extraBuffer },
+          publicTransport: {
+            minutes: raw.publicTransport.minutes,
+            leaveMinutesBefore: raw.publicTransport.leaveMinutesBefore + ctx.extraBuffer,
+          },
+        };
+      } else {
+        travel = raw;
+      }
+    }
+  }
+
+  const fullText = await getRecommendations({
+    title: ctx.title,
+    description: ctx.description,
+    locationName: ctx.resolvedLocation,
+    originName: ctx.originText,
+    weather: ctx.weather,
+    travel,
+    preferredTransport: ctx.preferredTransport as Parameters<typeof getRecommendations>[0]["preferredTransport"],
+    userProfile: ctx.userProfile,
+  });
+
+  if (!fullText) return;
+
+  await supabase.from("recommendations").upsert(
+    {
+      item_id: itemId,
+      outfit_brief: ctx.outfitBrief,
+      full_text: fullText,
+      location_name: ctx.resolvedLocation,
+      weather: ctx.weather,
+      travel,
+      preferred_transport: ctx.preferredTransport,
+      generated_at: new Date().toISOString(),
+    },
+    { onConflict: "item_id" }
+  );
 }
 
 async function compensate(userId: string, itemId: string, googleEventId: string | null) {

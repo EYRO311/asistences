@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { decryptClient, encryptClient } from "@/lib/crypto-client";
 import type { Category, Effort, Item, Priority, TaskStatus } from "@/lib/types";
 import { sileo } from "sileo";
 import { IconBulb } from "@tabler/icons-react";
@@ -32,7 +33,7 @@ export function EditItemForm({ item }: { item: Item }) {
   const router = useRouter();
 
   const [title, setTitle] = useState(item.title);
-  const [description, setDescription] = useState(item.description ?? "");
+  const [description, setDescription] = useState("");
   const [allDay, setAllDay] = useState(item.all_day);
   const [startTime, setStartTime] = useState(
     item.start_time ? toLocalInputValue(new Date(item.start_time)) : toLocalInputValue(new Date())
@@ -45,12 +46,18 @@ export function EditItemForm({ item }: { item: Item }) {
   const [effort, setEffort] = useState<Effort | null>(item.effort);
   const [taskStatus, setTaskStatus] = useState<TaskStatus>(item.task_status);
   const [categories, setCategories] = useState<Category[]>(item.categories ?? []);
-  const [location, setLocation] = useState(item.location ?? "");
+  const [location, setLocation] = useState("");
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>(item.recurrence_days ?? []);
   const [recurrenceStartTime, setRecurrenceStartTime] = useState(item.recurrence_start_time ?? "09:00");
   const [recurrenceEndTime, setRecurrenceEndTime] = useState(item.recurrence_end_time ?? "18:00");
 
   const [loading, setLoading] = useState(false);
+
+  // Desencripta description y location al montar (llegan encriptados del servidor)
+  useEffect(() => {
+    decryptClient(item.description ?? null).then((v) => setDescription(v ?? ""));
+    decryptClient(item.location ?? null).then((v) => setLocation(v ?? ""));
+  }, [item.description, item.location]);
 
   function toggleCategory(category: Category) {
     setCategories((prev) =>
@@ -72,7 +79,7 @@ export function EditItemForm({ item }: { item: Item }) {
     try {
       const payload: Record<string, unknown> = {
         title,
-        description: description || undefined,
+        description: description ? await encryptClient(description) : undefined,
         all_day: allDay,
         start_time: new Date(startTime).toISOString(),
         end_time: new Date(endTime).toISOString(),
@@ -82,7 +89,7 @@ export function EditItemForm({ item }: { item: Item }) {
 
       if (priority) payload.priority = priority;
       if (effort) payload.effort = effort;
-      payload.location = location || undefined;
+      payload.location = location ? await encryptClient(location) : undefined;
 
       if (showWorkSchedule && recurrenceDays.length > 0) {
         const occurrence = nextOccurrence(recurrenceDays, recurrenceStartTime, recurrenceEndTime);

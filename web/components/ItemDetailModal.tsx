@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { decryptClient } from "@/lib/crypto-client";
 import Link from "next/link";
 import { sileo } from "sileo";
 import type { CachedRecommendation, Item, PreferredTransport, TravelEstimate } from "@/lib/types";
@@ -322,6 +323,13 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
   const [recData, setRecData] = useState<CachedRecommendation | null>(null);
   const [selectedTransport, setSelectedTransport] = useState<PreferredTransport | null>(null);
   const [keypointsOpen, setKeypointsOpen] = useState(false);
+  const [plainDescription, setPlainDescription] = useState<string | null>(null);
+  const [plainLocation, setPlainLocation] = useState<string | null>(null);
+
+  useEffect(() => {
+    decryptClient(item.description ?? null).then(setPlainDescription);
+    decryptClient(item.location ?? null).then(setPlainLocation);
+  }, [item.description, item.location]);
 
   return (
     <>
@@ -424,20 +432,20 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
           >
             <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Notes</p>
 
-            {item.location && (
+            {plainLocation && (
               <p className="flex items-start gap-1 text-sm text-muted">
                 <IconMapPin size={14} className="shrink-0 mt-0.5" aria-hidden />
-                <span>{item.location}</span>
+                <span>{plainLocation}</span>
               </p>
             )}
 
-            {item.description && (
+            {plainDescription && (
               <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
-                {item.description}
+                {plainDescription}
               </p>
             )}
 
-            {!item.location && !item.description && (
+            {!plainLocation && !plainDescription && (
               <p className="text-sm text-muted italic">Sin notas.</p>
             )}
 

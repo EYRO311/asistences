@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ItemList } from "@/components/ItemList";
 import { FreeSlots } from "@/components/FreeSlots";
+import { GoalList, type GoalRow } from "@/components/GoalList";
 import type { Item } from "@/lib/types";
 
 function startOfDay(date: Date): Date {
@@ -37,6 +38,23 @@ export default async function WeekPage() {
     .select("*")
     .not("recurrence_start_time", "is", null);
 
+  // Goals: recurring goals + unique goals with due_date in this week's range
+  const weekEndISO = rangeEnd.toISOString();
+  const weekStartISO = rangeStart.toISOString();
+
+  const { data: weekGoalsRaw } = await supabase
+    .from("goals")
+    .select("id, title, due_date, recurrence_type, goal_items(id, completed)")
+    .eq("status", "active")
+    .order("created_at", { ascending: true });
+
+  const weekGoals = ((weekGoalsRaw ?? []) as (GoalRow & { recurrence_type: string; due_date: string | null })[]).filter(
+    (g) =>
+      g.recurrence_type !== "none" || // recurring goals: always show in week view
+      !g.due_date || // no due date: also show
+      (g.due_date >= weekStartISO && g.due_date < weekEndISO) // unique: only if due this week
+  ) as GoalRow[];
+
   // Merge deduplicando por id (una rutina puede aparecer en ambas queries si se creó esta semana)
   const seenIds = new Set<string>();
   const all = [...(rangeItems ?? []), ...(routineItems ?? [])].filter((item) => {
@@ -56,6 +74,13 @@ export default async function WeekPage() {
         <h1 className="font-handwriting text-3xl mb-3">Disponibilidad de la semana</h1>
         <FreeSlots />
       </section>
+
+      {weekGoals.length > 0 && (
+        <section>
+          <h2 className="font-handwriting text-3xl mb-3">Metas de la semana</h2>
+          <GoalList goals={weekGoals} />
+        </section>
+      )}
 
       <section className="space-y-3">
         <h2 className="font-handwriting text-3xl mb-3">Tareas de esta semana</h2>
