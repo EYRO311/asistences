@@ -102,7 +102,6 @@ type TaskItemFields = Pick<
   | "type"
   | "start_time"
   | "end_time"
-  | "due_date"
   | "priority"
   | "effort"
   | "task_status"
@@ -111,7 +110,7 @@ type TaskItemFields = Pick<
   | "recurrence_days"
   | "recurrence_start_time"
   | "recurrence_end_time"
->;
+> & { due_date?: string | null };
 
 /**
  * Arma el objeto `properties` para crear/actualizar una página, mapeando

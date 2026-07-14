@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createItem, SagaError } from "@/lib/saga/createItem";
 import { fixMidnightISO, fixMidnightTime } from "@/lib/normalizeTime";
+import { decrypt } from "@/lib/crypto";
+import type { Item } from "@/lib/types";
 
 const createItemSchema = z.object({
   type: z.enum(["compromiso", "personal", "evento"]),
@@ -12,7 +14,6 @@ const createItemSchema = z.object({
   end_time: z.string().datetime().optional(),
   all_day: z.boolean().optional(),
   add_to_calendar: z.boolean().optional(),
-  due_date: z.string().datetime().optional(),
   priority: z.enum(["alta", "media", "baja"]).optional(),
   effort: z.enum(["pequeno", "media", "grande"]).optional(),
   task_status: z.enum(["sin_empezar", "en_curso", "listo"]).optional(),
@@ -43,7 +44,13 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ items: data });
+  const items = (data as Item[]).map((item) => ({
+    ...item,
+    description: decrypt(item.description),
+    location: decrypt(item.location),
+  }));
+
+  return NextResponse.json({ items });
 }
 
 export async function POST(request: NextRequest) {
@@ -68,7 +75,6 @@ export async function POST(request: NextRequest) {
     const data = {
       ...parsed.data,
       end_time: fixMidnightISO(parsed.data.end_time) as string | undefined,
-      due_date: fixMidnightISO(parsed.data.due_date) as string | undefined,
       recurrence_end_time: fixMidnightTime(parsed.data.recurrence_end_time) as string | undefined,
     };
     const item = await createItem(user.id, data);

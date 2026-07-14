@@ -40,7 +40,7 @@ export function EditItemForm({ item }: { item: Item }) {
   const [endTime, setEndTime] = useState(
     item.end_time ? toLocalInputValue(new Date(item.end_time)) : toLocalInputValue(new Date())
   );
-  const [dueDate, setDueDate] = useState(item.due_date ? item.due_date.slice(0, 10) : "");
+  const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<Priority | null>(item.priority);
   const [effort, setEffort] = useState<Effort | null>(item.effort);
   const [taskStatus, setTaskStatus] = useState<TaskStatus>(item.task_status);
@@ -82,7 +82,6 @@ export function EditItemForm({ item }: { item: Item }) {
 
       if (priority) payload.priority = priority;
       if (effort) payload.effort = effort;
-      if (dueDate) payload.due_date = new Date(dueDate).toISOString();
       payload.location = location || undefined;
 
       if (showWorkSchedule && recurrenceDays.length > 0) {
@@ -267,7 +266,7 @@ export function EditItemForm({ item }: { item: Item }) {
             {item.outfit_suggestion}
           </p>
         )}
-        <RecommendationsModal itemId={item.id} initialData={item.cached_recommendation} />
+        <RecommendationsModal itemId={item.id} />
       </div>
 
       {(item.google_event_id || item.notion_page_id) && (
