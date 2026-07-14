@@ -52,7 +52,19 @@ export async function getValidGoogleAccessToken(userId: string): Promise<string>
   const oauth2Client = getGoogleOAuthClient();
   oauth2Client.setCredentials({ refresh_token: integration.refresh_token });
 
-  const { credentials } = await oauth2Client.refreshAccessToken();
+  let credentials;
+  try {
+    ({ credentials } = await oauth2Client.refreshAccessToken());
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("invalid_grant") || msg.includes("Token has been expired or revoked")) {
+      // El refresh token ya no es válido — eliminar la integración para que el
+      // usuario sepa que debe reconectar su cuenta de Google.
+      await supabase.from("integrations").delete().eq("id", integration.id);
+      throw new Error("El usuario no tiene conectada su cuenta de Google (token revocado — reconecta en Ajustes)");
+    }
+    throw err;
+  }
 
   await supabase
     .from("integrations")
