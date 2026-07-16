@@ -50,10 +50,24 @@ export const CATEGORY_OPTIONS: Category[] = [
   "Salud",
   "Hogar",
   "Otro",
+  "Evento",
 ];
 
 // Categorías que activan el panel de horario recurrente (días + hora).
 export const RECURRING_CATEGORIES: Category[] = ["Trabajo", "Escuela", "Cursos extras"];
+
+// Categorías que determinan el tipo de tarea (compromiso/personal/evento) en el
+// formulario de "Nueva tarea": la categoría es el campo primario, el tipo se
+// deriva automáticamente y ya no se elige a mano.
+const COMPROMISO_CATEGORIES: Category[] = ["Trabajo", "Escuela", "Salud"];
+const PERSONAL_TYPE_CATEGORIES: Category[] = ["Cursos extras", "Hogar", "Personal"];
+
+export function deriveTypeFromCategories(categories: Category[]): ItemType {
+  if (categories.includes("Evento")) return "evento";
+  if (categories.some((c) => COMPROMISO_CATEGORIES.includes(c))) return "compromiso";
+  if (categories.some((c) => PERSONAL_TYPE_CATEGORIES.includes(c))) return "personal";
+  return "compromiso";
+}
 
 // Tag correspondiente en la columna "rutina" (multi_select) de Notion.
 export const RECURRING_CATEGORY_NOTION_TAG: Record<string, string> = {

@@ -13,12 +13,14 @@ import { HomePage } from "@/pages/HomePage";
 import { WeekPage } from "@/pages/WeekPage";
 import { MonthPage } from "@/pages/MonthPage";
 import { TasksPage } from "@/pages/TasksPage";
+import { GoalsPage } from "@/pages/GoalsPage";
 import { NewItemPage } from "@/pages/NewItemPage";
+import { EditItemPage } from "@/pages/EditItemPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { BottomNav } from "@/components/BottomNav";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 
-export type Page = "home" | "week" | "month" | "tasks" | "new";
+export type Page = "home" | "week" | "month" | "tasks" | "goals" | "new";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -28,8 +30,11 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showNew, setShowNew] = useState(false);
+  const [newItemMode, setNewItemMode] = useState<"tarea" | "meta">("tarea");
+  const [lockNewItemMode, setLockNewItemMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [integrationToast, setIntegrationToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,6 +147,7 @@ export default function App() {
     syncing,
     pendingCount,
     onItemClick: (item: Item) => setSelectedItem(item),
+    onNavigate: setCurrentPage,
   };
 
   return (
@@ -152,17 +158,34 @@ export default function App() {
         </div>
       )}
 
+      <div className="shrink-0 border-b border-border-soft bg-surface" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <button
+          type="button"
+          onClick={() => setCurrentPage("home")}
+          className="font-handwriting text-xl px-4 py-2 text-foreground"
+        >
+          Mi Agenda
+        </button>
+      </div>
+
       <main className="flex-1 overflow-y-auto" style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}>
         {currentPage === "home"  && <HomePage  items={items} onRefresh={refreshItems} session={session} {...sharedProps} />}
         {currentPage === "week"  && <WeekPage  items={items} {...sharedProps} />}
         {currentPage === "month" && <MonthPage items={items} {...sharedProps} />}
         {currentPage === "tasks" && <TasksPage items={items} {...sharedProps} />}
+        {currentPage === "goals" && (
+          <GoalsPage
+            session={session}
+            onSettings={sharedProps.onSettings}
+            onNewGoal={() => { setNewItemMode("meta"); setLockNewItemMode(true); setShowNew(true); }}
+          />
+        )}
       </main>
 
       <BottomNav
         current={currentPage}
         onChange={(page) => {
-          if (page === "new") setShowNew(true);
+          if (page === "new") { setNewItemMode("tarea"); setLockNewItemMode(false); setShowNew(true); }
           else setCurrentPage(page);
         }}
       />
@@ -170,8 +193,18 @@ export default function App() {
       {showNew && (
         <NewItemPage
           userId={session.user.id}
+          initialMode={newItemMode}
+          lockMode={lockNewItemMode}
           onClose={() => setShowNew(false)}
-          onCreated={() => { setShowNew(false); refreshItems(); setCurrentPage("home"); }}
+          onCreated={(mode) => {
+            setShowNew(false);
+            if (mode === "meta") {
+              setCurrentPage("goals");
+            } else {
+              refreshItems();
+              setCurrentPage("home");
+            }
+          }}
         />
       )}
 
@@ -180,7 +213,20 @@ export default function App() {
       )}
 
       {selectedItem && (
-        <ItemDetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />
+        <ItemDetailModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onEdit={(item) => { setSelectedItem(null); setEditingItem(item); }}
+        />
+      )}
+
+      {editingItem && (
+        <EditItemPage
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSaved={() => { setEditingItem(null); refreshItems(); }}
+          onDeleted={() => { setEditingItem(null); refreshItems(); }}
+        />
       )}
 
       {integrationToast && (

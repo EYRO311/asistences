@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Category, Effort, ItemType, Priority, TaskStatus } from "@/lib/types";
+import type { Category, Effort, GoalRecurrence, ItemType, Priority, TaskStatus } from "@/lib/types";
 import {
   CATEGORY_OPTIONS,
   EFFORT_OPTIONS,
@@ -7,17 +7,27 @@ import {
   RECURRING_CATEGORIES,
   TASK_STATUS_OPTIONS,
   WEEKDAY_OPTIONS,
+  deriveTypeFromCategories,
 } from "@/lib/itemPresentation";
 import { nextOccurrence } from "@/lib/recurrence";
 import { createLocalItem, updateLocalItem } from "@/db/items";
 import { supabase } from "@/lib/supabase";
+import { encryptClient } from "@/lib/crypto";
 import { Network } from "@capacitor/network";
 import { IconX } from "@tabler/icons-react";
 
-const TYPE_OPTIONS: { value: ItemType; label: string; defaultCalendar: boolean }[] = [
-  { value: "compromiso", label: "Compromiso", defaultCalendar: true },
-  { value: "personal", label: "Personal", defaultCalendar: false },
-  { value: "evento", label: "Evento", defaultCalendar: true },
+type CreationMode = "tarea" | "meta";
+
+const MODE_OPTIONS: { value: CreationMode; label: string }[] = [
+  { value: "tarea", label: "Tarea" },
+  { value: "meta", label: "Meta" },
+];
+
+const GOAL_RECURRENCE_OPTIONS: { value: GoalRecurrence; label: string }[] = [
+  { value: "none", label: "Única" },
+  { value: "daily", label: "Diaria" },
+  { value: "weekly", label: "Semanal" },
+  { value: "monthly", label: "Mensual" },
 ];
 
 function toLocalInputValue(date: Date) {
@@ -42,12 +52,15 @@ function fixMidnightTime(time: string): string {
 
 interface Props {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (mode: CreationMode) => void;
   userId: string;
+  initialMode?: CreationMode;
+  lockMode?: boolean;
 }
 
-export function NewItemPage({ onClose, onCreated, userId }: Props) {
-  const [type, setType] = useState<ItemType>("compromiso");
+export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea", lockMode = false }: Props) {
+  const [mode, setMode] = useState<CreationMode>(initialMode);
+  const [goalRecurrence, setGoalRecurrence] = useState<GoalRecurrence>("none");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [allDay, setAllDay] = useState(false);
@@ -63,6 +76,9 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
   const [effort, setEffort] = useState<Effort | null>(null);
   const [taskStatus, setTaskStatus] = useState<TaskStatus>("sin_empezar");
   const [categories, setCategories] = useState<Category[]>([]);
+  // El tipo (compromiso/personal/evento) ya no se elige a mano: se deriva de
+  // la categoría seleccionada (ver deriveTypeFromCategories).
+  const type: ItemType = deriveTypeFromCategories(categories);
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
   const [recurrenceStartTime, setRecurrenceStartTime] = useState("09:00");
   const [recurrenceEndTime, setRecurrenceEndTime] = useState("18:00");
@@ -88,6 +104,26 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
     setLoading(true);
 
     try {
+      if (mode === "meta") {
+        const networkStatus = await Network.getStatus();
+        if (!networkStatus.connected) {
+          throw new Error("Necesitas conexión a internet para crear una meta");
+        }
+
+        const { error: insertError } = await supabase.from("goals").insert({
+          user_id: userId,
+          title: title.trim(),
+          description: description.trim() ? await encryptClient(description.trim()) : null,
+          due_date: goalRecurrence === "none" && dueDate ? fixMidnightISO(new Date(dueDate).toISOString()) : null,
+          recurrence_type: goalRecurrence,
+          categories,
+        });
+        if (insertError) throw new Error(insertError.message);
+
+        onCreated("meta");
+        return;
+      }
+
       let startISO: string | undefined;
       let endISO: string | undefined;
       let recDays: number[] | undefined;
@@ -153,9 +189,9 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
         }
       }
 
-      onCreated();
+      onCreated("tarea");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear la tarea");
+      setError(err instanceof Error ? err.message : "Error al crear");
     } finally {
       setLoading(false);
     }
@@ -165,7 +201,7 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-border-soft shrink-0">
-        <h1 className="font-handwriting text-2xl">Nueva tarea</h1>
+        <h1 className="font-handwriting text-2xl">{mode === "meta" ? "Nueva meta" : "Nueva tarea"}</h1>
         <button type="button" onClick={onClose} className="text-muted hover:text-foreground p-1">
           <IconX size={20} aria-hidden />
         </button>
@@ -174,26 +210,53 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
       {/* Form */}
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
 
-        {/* Tipo */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">Tipo</label>
-          <div className="flex gap-2">
-            {TYPE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setType(opt.value)}
-                className={`flex-1 rounded-xl border py-2 text-sm transition-colors ${
-                  type === opt.value
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border-soft"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        {/* Modo */}
+        {!lockMode && (
+          <div>
+            <div className="flex gap-2">
+              {MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setMode(opt.value)}
+                  className={`flex-1 rounded-xl border py-2 text-sm font-medium transition-colors ${
+                    mode === opt.value
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border-soft"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Categoría (solo tarea) — primero: el tipo se deriva de aquí */}
+        {mode === "tarea" && <CategoriesField categories={categories} onToggle={toggleCategory} />}
+
+        {/* Frecuencia (solo meta) */}
+        {mode === "meta" && (
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">Frecuencia</label>
+            <div className="grid grid-cols-4 gap-2">
+              {GOAL_RECURRENCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setGoalRecurrence(opt.value)}
+                  className={`rounded-xl border py-2 text-xs text-center transition-colors ${
+                    goalRecurrence === opt.value
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border-soft"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Título */}
         <div>
@@ -225,27 +288,12 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
           />
         </div>
 
-        {/* Categorías */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">Categoría</label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORY_OPTIONS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => toggleCategory(c)}
-                className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${
-                  categories.includes(c)
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border-soft"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Categoría (solo meta) */}
+        {mode === "meta" && <CategoriesField categories={categories} onToggle={toggleCategory} />}
 
+        {/* Campos exclusivos de tarea */}
+        {mode === "tarea" && (
+          <>
         {/* Horario recurrente (si es rutina) */}
         {showWorkSchedule ? (
           <div>
@@ -418,6 +466,24 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
             ))}
           </div>
         </div>
+          </>
+        )}
+
+        {/* Fecha límite (solo meta única) */}
+        {mode === "meta" && goalRecurrence === "none" && (
+          <div>
+            <label htmlFor="goal_due" className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+              Fecha límite
+            </label>
+            <input
+              id="goal_due"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm"
+            />
+          </div>
+        )}
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
@@ -427,11 +493,41 @@ export function NewItemPage({ onClose, onCreated, userId }: Props) {
           disabled={loading || !title.trim()}
           className="w-full rounded-xl bg-foreground py-4 text-sm font-semibold text-background disabled:opacity-40"
         >
-          {loading ? "Guardando..." : "Crear tarea"}
+          {loading ? "Guardando..." : mode === "meta" ? "Crear meta" : "Crear tarea"}
         </button>
 
         <div className="h-4" />
       </form>
+    </div>
+  );
+}
+
+function CategoriesField({
+  categories,
+  onToggle,
+}: {
+  categories: Category[];
+  onToggle: (c: Category) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">Categoría</label>
+      <div className="flex flex-wrap gap-2">
+        {CATEGORY_OPTIONS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onToggle(c)}
+            className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${
+              categories.includes(c)
+                ? "border-foreground bg-foreground text-background"
+                : "border-border-soft"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

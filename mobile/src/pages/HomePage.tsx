@@ -1,10 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import type { Page } from "@/App";
 import type { Item } from "@/lib/types";
 import { occurrenceForDate } from "@/lib/recurrence";
 import { TYPE_BADGE_COLORS, TYPE_DOT_COLORS, formatTimeRange } from "@/lib/itemPresentation";
+import { geocodeLocation, getDailyWeather, type DailyWeather } from "@/lib/weather";
+import { supabase } from "@/lib/supabase";
 import { AppHeader } from "@/components/AppHeader";
-import { IconChevronDown, IconShirt } from "@tabler/icons-react";
+import { GoalList, type GoalRow } from "@/components/GoalList";
+import { RecentEmails } from "@/components/RecentEmails";
+import {
+  IconChevronDown,
+  IconShirt,
+  IconSun,
+  IconSunHigh,
+  IconCloud,
+  IconCloudRain,
+  IconCloudStorm,
+  IconSnowflake,
+  IconMist,
+} from "@tabler/icons-react";
 
 interface Props {
   items: Item[];
@@ -15,6 +30,25 @@ interface Props {
   syncing: boolean;
   pendingCount: number;
   onItemClick: (item: Item) => void;
+  onNavigate: (page: Page) => void;
+}
+
+function WeatherIcon({ desc, size = 32 }: { desc: string; size?: number }) {
+  const props = { size, stroke: 1.5, "aria-hidden": true } as const;
+  if (desc.includes("tormenta")) return <IconCloudStorm {...props} />;
+  if (desc.includes("nieve")) return <IconSnowflake {...props} />;
+  if (desc.includes("lluvia") || desc.includes("llovizna")) return <IconCloudRain {...props} />;
+  if (desc.includes("neblina")) return <IconMist {...props} />;
+  if (desc.includes("nublado")) return <IconCloud {...props} />;
+  if (desc.includes("parcialmente")) return <IconSunHigh {...props} />;
+  return <IconSun {...props} />;
+}
+
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return "Buenos días";
+  if (hour >= 12 && hour < 19) return "Buenas tardes";
+  return "Buenas noches";
 }
 
 function toDateParam(d: Date) {
@@ -68,9 +102,54 @@ function pickOutfit(dayItems: Item[]): { text: string; fromTitle: string } | nul
   return null;
 }
 
-export function HomePage({ items, onSettings, onSync, syncing, pendingCount, onItemClick }: Props) {
+export function HomePage({ items, session, onSettings, onSync, syncing, pendingCount, onItemClick, onNavigate }: Props) {
   const [freeSlotsOpen, setFreeSlotsOpen] = useState(false);
+  const [weather, setWeather] = useState<DailyWeather | null>(null);
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const [goals, setGoals] = useState<GoalRow[] | null>(null);
   const today = new Date();
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadProfileAndWeather() {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("full_name, location")
+          .eq("id", session.user.id)
+          .single();
+        if (cancelled) return;
+        if (data?.full_name) setFirstName(data.full_name.split(" ")[0]);
+        if (!data?.location) return;
+        const geo = await geocodeLocation(data.location);
+        if (cancelled || !geo) return;
+        setLocationName(geo.name);
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const w = await getDailyWeather(geo.latitude, geo.longitude, todayStr);
+        if (!cancelled) setWeather(w);
+      } catch {
+        // clima/nombre son opcionales, no bloqueamos la pantalla
+      }
+    }
+    loadProfileAndWeather();
+    return () => { cancelled = true; };
+  }, [session.user.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadGoals() {
+      const { data } = await supabase
+        .from("goals")
+        .select("id, title, due_date, recurrence_type, goal_items(id, completed)")
+        .eq("user_id", session.user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: true });
+      if (!cancelled) setGoals((data ?? []) as GoalRow[]);
+    }
+    loadGoals();
+    return () => { cancelled = true; };
+  }, [session.user.id]);
 
   const dayItems = items
     .map((item) => occurrenceForDate(item, today))
@@ -91,61 +170,68 @@ export function HomePage({ items, onSettings, onSync, syncing, pendingCount, onI
   return (
     <div className="px-4 pb-4">
       <AppHeader title="Hoy" onSettings={onSettings} onSync={onSync} syncing={syncing} pendingCount={pendingCount} />
-      <p className="text-xs text-muted capitalize mb-4 px-0.5">{dayLabel}</p>
 
-      {/* Outfit del día */}
-      {outfit && (
-        <div className="rounded-2xl border border-border-soft bg-surface p-3 flex gap-3 mb-2">
-          <IconShirt size={22} stroke={1.5} className="shrink-0 mt-0.5 text-muted" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-[10px] text-muted mb-0.5 uppercase tracking-wide font-semibold">
-              Ropa para hoy · {outfit.fromTitle}
-            </p>
-            <p className="text-sm leading-snug">{outfit.text}</p>
-          </div>
-        </div>
-      )}
+      {/* Arriba: día + bienvenida */}
+      <p className="text-xs text-muted capitalize px-0.5">{dayLabel}</p>
+      <h1 className="font-handwriting text-2xl mb-4 px-0.5">
+        {greeting()}{firstName ? `, ${firstName}` : ""}
+      </h1>
 
-      {/* Eventos del día */}
-      {dayItems.length === 0 ? (
-        <div className="rounded-2xl border border-border-soft bg-surface px-5 py-6 text-center mb-2">
-          <p className="text-sm text-muted">Sin eventos para hoy</p>
+      {/* Metas */}
+      <section className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-medium">Mis metas</h2>
+          <button type="button" onClick={() => onNavigate("goals")} className="text-xs text-muted hover:text-foreground">
+            Ver todas →
+          </button>
         </div>
-      ) : (
-        <div className="space-y-2 mb-2">
-          {dayItems.map((item) => {
-            const timeLabel = formatTimeRange(item);
-            return (
-              <button
-                key={`${item.id}-${toDateParam(today)}`}
-                type="button"
-                onClick={() => onItemClick(item)}
-                className="w-full rounded-2xl border border-border-soft bg-surface p-3 text-left"
-              >
-                <div className="flex items-start gap-2.5">
-                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TYPE_DOT_COLORS[item.type]}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm leading-snug">{item.title}</p>
-                    {item.description && (
-                      <p className="text-xs text-muted mt-0.5 line-clamp-2">{item.description}</p>
-                    )}
-                    {timeLabel !== "Sin fecha" && (
-                      <p className="text-xs text-muted mt-0.5">{timeLabel}</p>
-                    )}
-                  </div>
-                  <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-semibold ${TYPE_BADGE_COLORS[item.type]}`}>
-                    {item.type}
+        {goals === null ? (
+          <p className="text-sm text-muted">Cargando...</p>
+        ) : (
+          <GoalList goals={goals} emptyText="No tienes metas activas." />
+        )}
+      </section>
+
+      {/* Recomendación de vestimenta + clima */}
+      <section className="mb-4">
+        <h2 className="text-sm font-medium mb-2">Recomendación de hoy</h2>
+        <div className="rounded-2xl border border-border-soft bg-surface p-3 space-y-3">
+          {weather && (
+            <div className="flex items-center gap-3">
+              <WeatherIcon desc={weather.description} />
+              <div className="min-w-0">
+                <p className="text-[10px] text-muted truncate">{locationName}</p>
+                <p className="text-sm">
+                  <span className="font-semibold">
+                    {Math.round(weather.tempMaxC)}° / {Math.round(weather.tempMinC)}°
                   </span>
-                </div>
-              </button>
-            );
-          })}
+                  <span className="text-muted capitalize">
+                    {" "}· {weather.description} · {weather.precipitationProbability}% lluvia
+                  </span>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {outfit ? (
+            <div className={`flex gap-2.5 ${weather ? "border-t border-border-soft pt-3" : ""}`}>
+              <IconShirt size={20} stroke={1.5} className="shrink-0 mt-0.5 text-muted" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-[10px] text-muted mb-0.5 uppercase tracking-wide font-semibold">
+                  {outfit.fromTitle}
+                </p>
+                <p className="text-sm leading-snug">{outfit.text}</p>
+              </div>
+            </div>
+          ) : (
+            !weather && <p className="text-sm text-muted">Sin recomendación por ahora.</p>
+          )}
         </div>
-      )}
+      </section>
 
       {/* Tiempo libre */}
       {freeSlots.length > 0 && (
-        <div className="rounded-2xl border border-border-soft overflow-hidden">
+        <div className="rounded-2xl border border-border-soft overflow-hidden mb-4">
           <button
             type="button"
             onClick={() => setFreeSlotsOpen((v) => !v)}
@@ -175,6 +261,49 @@ export function HomePage({ items, onSettings, onSync, syncing, pendingCount, onI
           )}
         </div>
       )}
+
+      {/* Abajo: tareas de hoy */}
+      <section className="mb-4">
+        <h2 className="text-sm font-medium mb-2">Tareas de hoy</h2>
+        {dayItems.length === 0 ? (
+          <div className="rounded-2xl border border-border-soft bg-surface px-5 py-6 text-center">
+            <p className="text-sm text-muted">Sin eventos para hoy</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {dayItems.map((item) => {
+              const timeLabel = formatTimeRange(item);
+              return (
+                <button
+                  key={`${item.id}-${toDateParam(today)}`}
+                  type="button"
+                  onClick={() => onItemClick(item)}
+                  className="w-full rounded-2xl border border-border-soft bg-surface p-3 text-left"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TYPE_DOT_COLORS[item.type]}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm leading-snug">{item.title}</p>
+                      {item.description && (
+                        <p className="text-xs text-muted mt-0.5 line-clamp-2">{item.description}</p>
+                      )}
+                      {timeLabel !== "Sin fecha" && (
+                        <p className="text-xs text-muted mt-0.5">{timeLabel}</p>
+                      )}
+                    </div>
+                    <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-semibold ${TYPE_BADGE_COLORS[item.type]}`}>
+                      {item.type}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Abajo: correos */}
+      <RecentEmails />
     </div>
   );
 }
