@@ -10,7 +10,7 @@ interface Props {
 
 export function AppHeader({ title, onSettings, onSync, syncing = false, pendingCount = 0 }: Props) {
   return (
-    <div className="flex items-center justify-between px-4 pb-2" style={{ paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
+    <div className="flex items-center justify-between px-4 pb-2 pt-4">
       <h1 className="font-handwriting text-3xl flex-1">{title}</h1>
       <div className="flex items-center gap-1">
         {onSync && (

@@ -1,8 +1,8 @@
 import {
-  IconHome,
   IconCalendar,
   IconCalendarMonth,
   IconClipboardList,
+  IconTarget,
   IconPlus,
 } from "@tabler/icons-react";
 import type { Page } from "@/App";
@@ -12,14 +12,14 @@ interface Props {
   onChange: (page: Page) => void;
 }
 
-const LEFT: { page: Page; Icon: typeof IconHome; label: string }[] = [
-  { page: "home", Icon: IconHome, label: "Inicio" },
+const LEFT: { page: Page; Icon: typeof IconCalendar; label: string }[] = [
   { page: "week", Icon: IconCalendar, label: "Semana" },
+  { page: "month", Icon: IconCalendarMonth, label: "Mes" },
 ];
 
-const RIGHT: { page: Page; Icon: typeof IconHome; label: string }[] = [
-  { page: "month", Icon: IconCalendarMonth, label: "Mes" },
+const RIGHT: { page: Page; Icon: typeof IconCalendar; label: string }[] = [
   { page: "tasks", Icon: IconClipboardList, label: "Tareas" },
+  { page: "goals", Icon: IconTarget, label: "Metas" },
 ];
 
 export function BottomNav({ current, onChange }: Props) {

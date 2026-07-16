@@ -2,10 +2,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Browser } from "@capacitor/browser";
 import type { Session } from "@supabase/supabase-js";
-import type { PreferredTransport } from "@/lib/types";
+import type { Gender, PreferredTransport } from "@/lib/types";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
 import { getIntegrations, disconnectIntegration, type Integration } from "@/lib/integrations";
 import { IconX, IconSun, IconMoon, IconDeviceLaptop, IconCalendar, IconBrandNotion, IconCheck, IconUnlink } from "@tabler/icons-react";
+
+const GENDER_OPTIONS: { value: Gender; label: string }[] = [
+  { value: "femenino", label: "Femenino" },
+  { value: "masculino", label: "Masculino" },
+  { value: "no_binario", label: "No binario" },
+  { value: "prefiero_no_decir", label: "Prefiero no decir" },
+];
 
 const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
 
@@ -34,10 +41,15 @@ function applyTheme(theme: Theme) {
 
 export function SettingsPage({ session, onClose }: Props) {
   const [fullName, setFullName] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState<Gender | null>(null);
   const [location, setLocation] = useState("");
   const [transport, setTransport] = useState<PreferredTransport | "">("");
+  const [extraBuffer, setExtraBuffer] = useState(0);
   const [wakeTime, setWakeTime] = useState("07:00");
   const [sleepTime, setSleepTime] = useState("23:00");
+  const [notionDatabaseId, setNotionDatabaseId] = useState("");
+  const [showNotionHelp, setShowNotionHelp] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("theme") as Theme) ?? "system");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -47,16 +59,20 @@ export function SettingsPage({ session, onClose }: Props) {
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("full_name, location, preferred_transport, wake_time, sleep_time")
+      .select("full_name, age, gender, location, preferred_transport, extra_buffer_minutes, wake_time, sleep_time, notion_database_id")
       .eq("id", session.user.id)
       .single()
       .then(({ data }) => {
         if (!data) return;
         setFullName(data.full_name ?? "");
+        setAge(data.age != null ? String(data.age) : "");
+        setGender((data.gender as Gender) ?? null);
         setLocation(data.location ?? "");
         setTransport((data.preferred_transport as PreferredTransport) ?? "");
+        setExtraBuffer(data.extra_buffer_minutes ?? 0);
         setWakeTime(data.wake_time ?? "07:00");
         setSleepTime(data.sleep_time ?? "23:00");
+        setNotionDatabaseId(data.notion_database_id ?? "");
       });
     getIntegrations(session.user.id).then(setIntegrations);
   }, [session.user.id]);
@@ -93,10 +109,14 @@ export function SettingsPage({ session, onClose }: Props) {
     setSaving(true);
     await supabase.from("profiles").update({
       full_name: fullName || null,
+      age: age ? Number(age) : null,
+      gender: gender ?? null,
       location: location || null,
       preferred_transport: transport || null,
+      extra_buffer_minutes: extraBuffer,
       wake_time: wakeTime,
       sleep_time: sleepTime,
+      notion_database_id: notionDatabaseId || null,
       theme: theme === "system" ? null : theme,
     }).eq("id", session.user.id);
     setSaving(false);
@@ -160,6 +180,39 @@ export function SettingsPage({ session, onClose }: Props) {
             placeholder="Tu nombre"
             className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
           />
+        </div>
+
+        {/* Edad y género */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="age" className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+              Edad
+            </label>
+            <input
+              id="age"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={120}
+              value={age}
+              onChange={(e) => setAge(e.target.value.replace(/\D/g, ""))}
+              placeholder="Ej. 25"
+              className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">Género</label>
+            <select
+              value={gender ?? ""}
+              onChange={(e) => setGender((e.target.value as Gender) || null)}
+              className="w-full rounded-xl border border-border-soft bg-surface px-3 py-3 text-sm focus:outline-none"
+            >
+              <option value="">Sin especificar</option>
+              {GENDER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Ubicación */}
@@ -227,6 +280,28 @@ export function SettingsPage({ session, onClose }: Props) {
           </div>
         </div>
 
+        {/* Tiempo extra al salir */}
+        <div>
+          <label htmlFor="extra_buffer" className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+            Tiempo extra al salir
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="extra_buffer"
+              type="range"
+              min={0}
+              max={30}
+              step={5}
+              value={extraBuffer}
+              onChange={(e) => setExtraBuffer(Number(e.target.value))}
+              className="flex-1"
+            />
+            <span className="w-16 shrink-0 text-center text-sm font-medium">
+              {extraBuffer === 0 ? "Sin extra" : `+${extraBuffer} min`}
+            </span>
+          </div>
+        </div>
+
         {/* Integraciones */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
@@ -276,6 +351,38 @@ export function SettingsPage({ session, onClose }: Props) {
               );
             })}
           </div>
+        </div>
+
+        {/* ID de base de datos de Notion */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <label htmlFor="notion_db" className="text-xs font-semibold uppercase tracking-wide text-muted">
+              ID de la base de datos de Notion
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowNotionHelp((v) => !v)}
+              className="w-4 h-4 rounded-full border border-border-soft text-[10px] text-muted flex items-center justify-center"
+            >
+              ?
+            </button>
+          </div>
+          <input
+            id="notion_db"
+            value={notionDatabaseId}
+            onChange={(e) => setNotionDatabaseId(e.target.value)}
+            placeholder="32 caracteres del final de la URL de la base de datos"
+            className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+          />
+          {showNotionHelp && (
+            <p className="mt-2 text-xs text-muted leading-relaxed rounded-xl border border-border-soft bg-surface px-3 py-2.5">
+              Abre tu base de datos en Notion → <strong>···</strong> → <strong>Copiar enlace</strong>. El ID son los
+              32 caracteres alfanuméricos al final del nombre en la URL (antes del <code>?</code>). No olvides
+              conectar tu integración de Notion a esa base de datos: <strong>···</strong> →{" "}
+              <strong>Conexiones</strong> → selecciona tu integración.
+            </p>
+          )}
+          <p className="mt-1 text-xs text-muted">Cada nueva tarea creará una página dentro de esta base de datos.</p>
         </div>
 
         {/* Cuenta */}

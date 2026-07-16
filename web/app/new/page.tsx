@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Category, Effort, GoalRecurrence, ItemType, Priority, TaskStatus } from "@/lib/types";
 import {
   CATEGORY_OPTIONS,
   EFFORT_OPTIONS,
   PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
+  deriveTypeFromCategories,
 } from "@/lib/itemPresentation";
 import { ChipGroup } from "@/components/ChipGroup";
 import { LocationField } from "@/components/LocationField";
@@ -56,10 +57,21 @@ function toLocalInputValue(date: Date): string {
 }
 
 export default function NewItemPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewItemForm />
+    </Suspense>
+  );
+}
+
+function NewItemForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const forcedMode = searchParams.get("mode");
+  const lockMode = forcedMode === "meta";
 
   // ── Modo seleccionado ──
-  const [mode, setMode] = useState<CreationMode>("tarea");
+  const [mode, setMode] = useState<CreationMode>(forcedMode === "meta" ? "meta" : "tarea");
 
   // ── Campos comunes ──
   const [title, setTitle] = useState("");
@@ -67,9 +79,14 @@ export default function NewItemPage() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   // ── Tarea ──
-  const [itemSubtype, setItemSubtype] = useState<ItemType>("compromiso");
+  // El tipo (compromiso/personal/evento) ya no se elige a mano: se deriva de
+  // la categoría seleccionada (ver deriveTypeFromCategories).
+  const itemSubtype: ItemType = deriveTypeFromCategories(categories);
   const [allDay, setAllDay] = useState(false);
-  const [addToCalendar, setAddToCalendar] = useState(true);
+  // null = sigue el default del tipo derivado; boolean = el usuario lo cambió a mano.
+  const [addToCalendarOverride, setAddToCalendarOverride] = useState<boolean | null>(null);
+  const addToCalendar =
+    addToCalendarOverride ?? (ITEM_SUBTYPES.find((o) => o.value === itemSubtype)?.defaultCalendar ?? true);
   const now = new Date();
   const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
   const [startTime, setStartTime] = useState(toLocalInputValue(now));
@@ -108,12 +125,7 @@ export default function NewItemPage() {
     setTitle("");
     setDescription("");
     setCategories([]);
-  }
-
-  function handleSubtypeChange(value: ItemType) {
-    setItemSubtype(value);
-    const opt = ITEM_SUBTYPES.find((o) => o.value === value);
-    setAddToCalendar(opt?.defaultCalendar ?? false);
+    setAddToCalendarOverride(null);
   }
 
   function toggleCategory(category: Category) {
@@ -234,9 +246,10 @@ export default function NewItemPage() {
 
   return (
     <main className="mx-auto w-full max-w-xl flex-1 lg:max-w-2xl px-4 py-8">
-      <h1 className="font-handwriting text-3xl mb-6">Nuevo</h1>
+      <h1 className="font-handwriting text-3xl mb-6">{lockMode ? "Nueva meta" : "Nuevo"}</h1>
 
       {/* ── Selector de modo ── */}
+      {!lockMode && (
       <div className="grid grid-cols-3 gap-2 mb-8">
         {MODES.map((m) => (
           <button
@@ -260,32 +273,14 @@ export default function NewItemPage() {
           </button>
         ))}
       </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
         {/* ════════════ TAREA ════════════ */}
         {mode === "tarea" && (
           <>
-            {/* Sub-tipo */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Tipo de tarea</label>
-              <div className="flex gap-2">
-                {ITEM_SUBTYPES.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => handleSubtypeChange(opt.value)}
-                    className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                      itemSubtype === opt.value
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border-soft"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <CategoriesField categories={categories} onToggle={toggleCategory} />
 
             <TitleField value={title} onChange={setTitle} />
             <DescriptionField value={description} onChange={setDescription} />
@@ -335,14 +330,12 @@ export default function NewItemPage() {
               />
             </div>
 
-            <CategoriesField categories={categories} onToggle={toggleCategory} />
-
             <div className="flex items-center gap-2">
               <input
                 id="add_to_calendar"
                 type="checkbox"
                 checked={addToCalendar}
-                onChange={(e) => setAddToCalendar(e.target.checked)}
+                onChange={(e) => setAddToCalendarOverride(e.target.checked)}
               />
               <label htmlFor="add_to_calendar" className="text-sm">Agregar a Google Calendar</label>
             </div>

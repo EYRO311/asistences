@@ -19,7 +19,7 @@ const updateItemSchema = z.object({
   priority: z.enum(["alta", "media", "baja"]).optional(),
   effort: z.enum(["pequeno", "media", "grande"]).optional(),
   task_status: z.enum(["sin_empezar", "en_curso", "listo"]).optional(),
-  categories: z.array(z.enum(["Trabajo", "Escuela", "Cursos extras", "Personal", "Salud", "Hogar", "Otro"])).optional(),
+  categories: z.array(z.enum(["Trabajo", "Escuela", "Cursos extras", "Personal", "Salud", "Hogar", "Otro", "Evento"])).optional(),
   location: z.string().optional(),
   recurrence_days: z.array(z.number().int().min(1).max(7)).optional(),
   recurrence_start_time: z.string().optional(),

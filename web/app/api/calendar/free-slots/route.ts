@@ -19,15 +19,26 @@ function buildWorkingHours(
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
+  const service = createServiceRoleClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Auth: cookie session (web) OR Bearer token (mobile)
+  let userId: string | undefined;
+  const authHeader = request.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const { data } = await service.auth.getUser(authHeader.slice(7));
+    userId = data.user?.id;
+  } else {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id;
+  }
 
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
+  const user = { id: userId };
 
   const parsed = querySchema.safeParse({
     time_min: request.nextUrl.searchParams.get("time_min"),
@@ -39,8 +50,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const service = createServiceRoleClient();
-
     const { data: profile } = await service
       .from("profiles")
       .select("timezone, wake_time, sleep_time")

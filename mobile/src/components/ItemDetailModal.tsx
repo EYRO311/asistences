@@ -35,7 +35,15 @@ function getTravelMode(travel: TravelEstimate, preferred: PreferredTransport | n
   return { mode, data };
 }
 
-export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => void }) {
+export function ItemDetailModal({
+  item,
+  onClose,
+  onEdit,
+}: {
+  item: Item;
+  onClose: () => void;
+  onEdit?: (item: Item) => void;
+}) {
   const [keypointsOpen, setKeypointsOpen] = useState(false);
   const [visible, setVisible] = useState(false);
   const [liveRec, setLiveRec] = useState<CachedRecommendation | null>(item.cached_recommendation ?? null);
@@ -278,11 +286,22 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
           <p className="text-[9px] font-semibold text-muted uppercase tracking-widest mb-1.5">Summary</p>
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted">{STATUS_LABELS[item.status]}</span>
-            {item.notion_url && (
-              <a href={item.notion_url} target="_blank" rel="noreferrer" className="text-xs text-muted underline">
-                Ver en Notion
-              </a>
-            )}
+            <div className="flex items-center gap-3">
+              {item.notion_url && (
+                <a href={item.notion_url} target="_blank" rel="noreferrer" className="text-xs text-muted underline">
+                  Ver en Notion
+                </a>
+              )}
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(item)}
+                  className="text-xs text-muted underline hover:text-foreground"
+                >
+                  Editar
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

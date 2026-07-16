@@ -3,6 +3,7 @@ import type { Item } from "@/lib/types";
 import { occurrenceForDate } from "@/lib/recurrence";
 import { ItemCard } from "@/components/ItemCard";
 import { AppHeader } from "@/components/AppHeader";
+import { FreeSlots } from "@/components/FreeSlots";
 
 function startOfDay(d: Date) { const r = new Date(d); r.setHours(0, 0, 0, 0); return r; }
 function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
@@ -96,6 +97,8 @@ export function WeekPage({ items, onSettings, onSync, syncing, pendingCount, onI
           touchStartX.current = null;
         }}
       >
+        <FreeSlots />
+
         {/* Day title */}
         <p className="text-xs text-muted capitalize mb-3 px-0.5">
           {isToday ? <span className="text-foreground font-semibold">Hoy · </span> : null}

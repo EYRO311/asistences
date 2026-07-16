@@ -5,7 +5,7 @@ export type ItemStatus = "draft" | "syncing" | "confirmed" | "failed" | "cancell
 export type Priority = "alta" | "media" | "baja";
 export type Effort = "pequeno" | "media" | "grande";
 export type TaskStatus = "sin_empezar" | "en_curso" | "listo";
-export type Category = "Trabajo" | "Escuela" | "Cursos extras" | "Personal" | "Salud" | "Hogar" | "Otro";
+export type Category = "Trabajo" | "Escuela" | "Cursos extras" | "Personal" | "Salud" | "Hogar" | "Otro" | "Evento";
 export type ItemSource = "app" | "google_sync" | "notion_sync";
 
 export interface TravelModeEstimate {
@@ -133,4 +133,41 @@ export interface FreeSlot {
   date: string; // YYYY-MM-DD
   free: boolean;
   free_blocks: { start: string; end: string }[];
+}
+
+// ── Goals (metas) ────────────────────────────────────────────────────────────
+
+export type GoalRecurrence = "none" | "daily" | "weekly" | "monthly";
+export type GoalStatus = "active" | "completed" | "archived";
+
+export interface Goal {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null; // encriptado en BD, desencriptado en app
+  due_date: string | null;    // solo para type 'none' (meta única con fecha límite)
+  recurrence_type: GoalRecurrence;
+  status: GoalStatus;
+  categories: Category[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GoalItem {
+  id: string;
+  goal_id: string;
+  title: string; // encriptado en BD, desencriptado en app
+  completed: boolean;
+  completed_at: string | null;
+  reset_at: string | null;
+  order_index: number;
+  created_at: string;
+}
+
+export interface CreateGoalInput {
+  title: string;
+  description?: string;
+  due_date?: string;
+  recurrence_type: GoalRecurrence;
+  categories?: Category[];
 }
