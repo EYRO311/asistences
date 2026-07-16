@@ -47,7 +47,7 @@ export default async function MetasPage() {
           )}
         </div>
         <Link
-          href="/new"
+          href="/new?mode=meta"
           className="rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium"
         >
           + Nueva meta
@@ -58,7 +58,7 @@ export default async function MetasPage() {
         <div className="rounded-xl border border-border-soft bg-surface px-4 py-8 text-center">
           <p className="text-sm text-muted">No tienes metas activas.</p>
           <Link
-            href="/new"
+            href="/new?mode=meta"
             className="mt-2 inline-block text-sm underline hover:text-foreground text-muted"
           >
             Crear tu primera meta

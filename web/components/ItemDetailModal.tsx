@@ -118,6 +118,7 @@ function RecommendationsInline({
   const [data, setData] = useState<CachedRecommendation | null>(initial);
   const [loading, setLoading] = useState(false);
   const prevTransport = useRef(selectedTransport);
+  const fetchedItemRef = useRef<string | null>(null);
 
   async function load(refresh = false, transport?: PreferredTransport | null) {
     setLoading(true);
@@ -148,6 +149,15 @@ function RecommendationsInline({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTransport]);
+
+  // Carga la recomendación (ya cacheada o recién generada) al abrir el modal,
+  // en vez de esperar a que el usuario la pida manualmente.
+  useEffect(() => {
+    if (data || fetchedItemRef.current === itemId) return;
+    fetchedItemRef.current = itemId;
+    load(false, selectedTransport);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
 
   if (!data && !loading) {
     return (
@@ -279,18 +289,18 @@ function KeypointsPanel({
         </div>
       </div>
 
-      {/* Location + weather (compact, once recommendations load) */}
-      {recData && (
-        <div className="flex flex-col gap-2">
+      {/* Location + weather (once recommendations load) */}
+      {recData && (recData.location || recData.weather) && (
+        <div className="rounded-md border border-border-soft bg-background/40 p-3 flex flex-col gap-2.5">
           {recData.location && (
-            <div className="flex items-start gap-1 text-[11px] text-muted leading-snug">
-              <IconMapPin size={11} className="shrink-0 mt-0.5" aria-hidden />
+            <div className="flex items-start gap-1.5 text-sm text-foreground/80 leading-snug">
+              <IconMapPin size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>{recData.location}</span>
             </div>
           )}
           {recData.weather && (
-            <div className="flex items-start gap-1 text-xs text-muted leading-snug font-handwriting">
-              <IconSunHigh size={12} className="shrink-0 mt-0.5" aria-hidden />
+            <div className="flex items-start gap-1.5 text-lg text-foreground/80 leading-snug font-handwriting">
+              <IconSunHigh size={20} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 {recData.weather.description},{" "}
                 {Math.round(recData.weather.tempMinC)}°–{Math.round(recData.weather.tempMaxC)}°C,{" "}

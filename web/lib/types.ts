@@ -5,7 +5,7 @@ export type ItemStatus = "draft" | "syncing" | "confirmed" | "failed" | "cancell
 export type Priority = "alta" | "media" | "baja";
 export type Effort = "pequeno" | "media" | "grande";
 export type TaskStatus = "sin_empezar" | "en_curso" | "listo";
-export type Category = "Trabajo" | "Escuela" | "Cursos extras" | "Personal" | "Salud" | "Hogar" | "Otro";
+export type Category = "Trabajo" | "Escuela" | "Cursos extras" | "Personal" | "Salud" | "Hogar" | "Otro" | "Evento";
 export type ItemSource = "app" | "google_sync" | "notion_sync";
 
 export interface TravelModeEstimate {

@@ -3,21 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  IconHome,
   IconCalendar,
   IconCalendarMonth,
   IconClipboardList,
+  IconTarget,
 } from "@tabler/icons-react";
 import type { TablerIcon } from "@/lib/itemPresentation";
 
 const LINKS: { href: string; Icon: TablerIcon; label: string }[] = [
-  { href: "/", Icon: IconHome as TablerIcon, label: "Inicio" },
   { href: "/semana", Icon: IconCalendar as TablerIcon, label: "Semana" },
+  { href: "/mes", Icon: IconCalendarMonth as TablerIcon, label: "Mes" },
 ];
 
 const LINKS_RIGHT: { href: string; Icon: TablerIcon; label: string }[] = [
-  { href: "/mes", Icon: IconCalendarMonth as TablerIcon, label: "Mes" },
   { href: "/tareas", Icon: IconClipboardList as TablerIcon, label: "Tareas" },
+  { href: "/metas", Icon: IconTarget as TablerIcon, label: "Metas" },
 ];
 
 export function MobileBottomNav() {

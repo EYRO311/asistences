@@ -200,13 +200,12 @@ export default async function HomePage() {
     )
     .slice(0, 6);
 
-  // Goals (active, up to 4)
+  // Goals pendientes (activas)
   const { data: goalsRaw } = await supabase
     .from("goals")
     .select("id, title, due_date, recurrence_type, goal_items(id, completed)")
     .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .limit(4);
+    .order("created_at", { ascending: true });
   const activeGoals = (goalsRaw ?? []) as GoalRow[];
 
   // Weather
@@ -238,64 +237,81 @@ export default async function HomePage() {
   const now = new Date();
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 space-y-6">
-      {/* ── Greeting ── */}
-      <div>
+    <main className="mx-auto max-w-2xl lg:max-w-6xl px-4 py-6 space-y-6">
+      {/* ── Arriba: día + bienvenida ── */}
+      <div className="border-b border-border-soft pb-4">
         <p className="text-sm text-muted capitalize">{dateLabel}</p>
         <h1 className="font-handwriting text-3xl mt-0.5">
           {greeting(tz)}{firstName ? `, ${firstName}` : ""}
         </h1>
       </div>
 
-      {/* ── Weather ── */}
-      {weather ? (
-        <div className="rounded-xl border border-border-soft bg-surface p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <WeatherIcon desc={weather.description} />
-              <div>
-                <p className="text-xs text-muted mb-0.5">{locationName}</p>
-                <p className="text-2xl font-semibold">
-                  {Math.round(weather.tempMaxC)}° / {Math.round(weather.tempMinC)}°
-                </p>
-                <p className="text-sm capitalize text-muted">{weather.description}</p>
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-xl font-medium">{weather.precipitationProbability}%</p>
-              <p className="text-xs text-muted">prob. lluvia</p>
-            </div>
+      {/* ── Metas (izquierda) | Recomendación de vestimenta + clima (derecha) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-medium">Mis metas</h2>
+            <Link href="/metas" className="text-xs text-muted hover:text-foreground">
+              Ver todas →
+            </Link>
           </div>
-          {tip && (
-            <p className="mt-3 pt-3 border-t border-border-soft text-sm text-muted">{tip}</p>
+          {activeGoals.length > 0 ? (
+            <GoalList goals={activeGoals} />
+          ) : (
+            <div className="rounded-xl border border-border-soft bg-surface px-4 py-6 text-center">
+              <p className="text-sm text-muted">No tienes metas activas.</p>
+            </div>
           )}
-        </div>
-      ) : profile.location ? (
-        <div className="rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm text-muted">
-          No se pudo obtener el clima para {profile.location}.
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm text-muted">
-          Agrega tu ubicación en{" "}
-          <Link href="/settings" className="underline hover:text-foreground">
-            Ajustes
-          </Link>{" "}
-          para ver el clima del día.
-        </div>
-      )}
+        </section>
 
-      {/* ── Outfit del día ── */}
-      {outfitCard && (
-        <div className="rounded-xl border border-border-soft bg-surface p-4 flex gap-3">
-          <IconShirt size={28} stroke={1.5} className="shrink-0 mt-0.5" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-xs text-muted mb-1">
-              {firstName ? `Para ti hoy, ${firstName}` : "Para hoy"} · {outfitCard.item.title}
-            </p>
-            <p className="text-sm leading-snug">{outfitCard.outfitText}</p>
+        <section>
+          <h2 className="font-medium mb-3">Recomendación de hoy</h2>
+          <div className="rounded-xl border border-border-soft bg-surface p-4 space-y-3">
+            {weather ? (
+              <div className="flex items-center gap-3">
+                <WeatherIcon desc={weather.description} size={32} />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted truncate">{locationName}</p>
+                  <p className="text-sm">
+                    <span className="font-semibold">
+                      {Math.round(weather.tempMaxC)}° / {Math.round(weather.tempMinC)}°
+                    </span>
+                    <span className="text-muted capitalize">
+                      {" "}· {weather.description} · {weather.precipitationProbability}% lluvia
+                    </span>
+                  </p>
+                </div>
+              </div>
+            ) : profile.location ? (
+              <p className="text-xs text-muted">No se pudo obtener el clima para {profile.location}.</p>
+            ) : (
+              <p className="text-xs text-muted">
+                Agrega tu ubicación en{" "}
+                <Link href="/settings" className="underline hover:text-foreground">
+                  Ajustes
+                </Link>{" "}
+                para ver el clima del día.
+              </p>
+            )}
+
+            {tip && <p className="text-xs text-muted border-t border-border-soft pt-3">{tip}</p>}
+
+            {outfitCard ? (
+              <div className={`flex gap-3 ${weather || tip ? "border-t border-border-soft pt-3" : ""}`}>
+                <IconShirt size={24} stroke={1.5} className="shrink-0 mt-0.5" aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted mb-1">
+                    {firstName ? `Para ti hoy, ${firstName}` : "Para hoy"} · {outfitCard.item.title}
+                  </p>
+                  <p className="text-sm leading-snug">{outfitCard.outfitText}</p>
+                </div>
+              </div>
+            ) : (
+              !weather && <p className="text-sm text-muted">Sin recomendación por ahora.</p>
+            )}
           </div>
-        </div>
-      )}
+        </section>
+      </div>
 
       {/* ── Tiempo libre hoy ── */}
       {freeSlots.length > 0 && (
@@ -326,10 +342,10 @@ export default async function HomePage() {
         </details>
       )}
 
-      {/* ── Agenda hoy ── */}
+      {/* ── Abajo: tareas de hoy ── */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium">Agenda de hoy</h2>
+          <h2 className="font-medium">Tareas de hoy</h2>
           <Link href="/semana" className="text-xs text-muted hover:text-foreground">
             Ver semana →
           </Link>
@@ -421,19 +437,6 @@ export default async function HomePage() {
         )}
       </section>
 
-      {/* ── Metas activas ── */}
-      {activeGoals.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-medium">Mis metas</h2>
-            <Link href="/metas" className="text-xs text-muted hover:text-foreground">
-              Ver todas →
-            </Link>
-          </div>
-          <GoalList goals={activeGoals} />
-        </section>
-      )}
-
       {/* ── Pendientes ── */}
       {pending.length > 0 && (
         <section>
@@ -479,7 +482,8 @@ export default async function HomePage() {
           </div>
         </section>
       )}
-      {/* ── Correos recientes ── */}
+
+      {/* ── Abajo: correos ── */}
       <GmailInbox />
     </main>
   );
