@@ -1,12 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Item } from "@/lib/types";
+import { decryptClient } from "@/lib/crypto-client";
 import { DeleteItemButton } from "@/components/DeleteItemButton";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { TYPE_BADGE_COLORS, TYPE_LABELS, STATUS_LABELS, formatDateRange } from "@/lib/itemPresentation";
 import { IconShirt } from "@tabler/icons-react";
+
+function ItemDescriptionPreview({ description }: { description: string | null }) {
+  const [plain, setPlain] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    decryptClient(description).then((v) => { if (!cancelled) setPlain(v); });
+    return () => { cancelled = true; };
+  }, [description]);
+
+  if (!plain) return null;
+  return <p className="text-sm text-foreground/80 line-clamp-2">{plain}</p>;
+}
 
 export function ItemList({ items }: { items: Item[] }) {
   const [selected, setSelected] = useState<Item | null>(null);
@@ -37,9 +51,7 @@ export function ItemList({ items }: { items: Item[] }) {
                 <span className="font-medium">{item.title}</span>
               </div>
               <p className="text-sm text-muted">{formatDateRange(item)}</p>
-              {item.description && (
-                <p className="text-sm text-foreground/80 line-clamp-2">{item.description}</p>
-              )}
+              {item.description && <ItemDescriptionPreview description={item.description} />}
               {item.outfit_suggestion && (
                 <p className="flex items-start gap-1 text-sm text-muted">
                   <IconShirt size={14} className="shrink-0 mt-0.5" aria-hidden />

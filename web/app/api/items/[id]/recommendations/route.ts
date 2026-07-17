@@ -1,47 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getRecommendations } from "@/lib/gemini";
 import { geocodeLocation, getDailyWeather } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/crypto";
 import type { Item, Profile, Recommendation } from "@/lib/types";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
-  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
-  const VALID_TRANSPORTS = ["car", "bike", "public_transport", "walking"] as const;
-  type ValidTransport = (typeof VALID_TRANSPORTS)[number];
-  const transportParam = request.nextUrl.searchParams.get("transport");
-  const transportOverride: ValidTransport | null =
-    transportParam && (VALID_TRANSPORTS as readonly string[]).includes(transportParam)
-      ? (transportParam as ValidTransport)
-      : null;
+const VALID_TRANSPORTS = ["car", "bike", "public_transport", "walking"] as const;
+type ValidTransport = (typeof VALID_TRANSPORTS)[number];
 
-  // Auth: cookie session (web) OR Bearer token (mobile)
+async function authenticate(request: NextRequest): Promise<string | null> {
   const service = createServiceRoleClient();
-  let userId: string | undefined;
   const authHeader = request.headers.get("Authorization");
   if (authHeader?.startsWith("Bearer ")) {
     const { data } = await service.auth.getUser(authHeader.slice(7));
-    userId = data.user?.id;
-  } else {
-    const cookieSupabase = await createClient();
-    const { data: { user } } = await cookieSupabase.auth.getUser();
-    userId = user?.id;
+    return data.user?.id ?? null;
   }
+  const cookieSupabase = await createClient();
+  const { data: { user } } = await cookieSupabase.auth.getUser();
+  return user?.id ?? null;
+}
 
-  if (!userId) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+async function buildRecommendation(
+  userId: string,
+  itemId: string,
+  options: {
+    forceRefresh: boolean;
+    transportOverride?: ValidTransport | null;
+    personalizedAnswers?: { question: string; answer: string }[];
+    locationOverride?: string;
   }
+) {
+  const service = createServiceRoleClient();
 
   const { data: item, error: itemError } = await service
     .from("items")
     .select("*")
-    .eq("id", id)
+    .eq("id", itemId)
     .eq("user_id", userId)
     .single<Item>();
 
@@ -49,26 +49,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Item no encontrado" }, { status: 404 });
   }
 
-  // Desencripta campos sensibles del item para usarlos en el prompt de Gemini
-  const itemLocation = decrypt(item.location);
+  // Desencripta campos sensibles del item para usarlos en el prompt de Gemini.
+  // Si el item no tenía ubicación y el cliente mandó una (pregunta personalizada
+  // "¿dónde será esto?"), se usa esa y además se guarda en el item.
+  const trimmedLocationOverride = options.locationOverride?.trim();
+  const itemLocation = decrypt(item.location) ?? (trimmedLocationOverride || null);
   const itemDescription = decrypt(item.description);
 
-  // Busca recomendación existente en la nueva tabla
-  const { data: existing } = await service
-    .from("recommendations")
-    .select("*")
-    .eq("item_id", id)
-    .single<Recommendation>();
+  if (trimmedLocationOverride && !decrypt(item.location)) {
+    await service.from("items").update({ location: encrypt(trimmedLocationOverride) }).eq("id", itemId);
+  }
 
-  if (existing && !forceRefresh) {
-    return NextResponse.json({
-      recommendation: existing.full_text,
-      outfit_suggestion: existing.outfit_brief,
-      location: existing.location_name,
-      weather: existing.weather,
-      travel: existing.travel,
-      preferredTransport: existing.preferred_transport,
-    });
+  const hasPersonalizedAnswers = Boolean(options.personalizedAnswers?.some((a) => a.answer.trim()));
+
+  // Busca recomendación existente en la nueva tabla (se ignora si esta
+  // petición trae respuestas personalizadas nuevas: siempre se regenera).
+  if (!hasPersonalizedAnswers) {
+    const { data: existing } = await service
+      .from("recommendations")
+      .select("*")
+      .eq("item_id", itemId)
+      .single<Recommendation>();
+
+    if (existing && !options.forceRefresh) {
+      return NextResponse.json({
+        recommendation: existing.full_text,
+        outfit_suggestion: existing.outfit_brief,
+        location: existing.location_name,
+        weather: existing.weather,
+        travel: existing.travel,
+        preferredTransport: existing.preferred_transport,
+      });
+    }
   }
 
   const { data: profile } = await service
@@ -116,7 +128,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
   }
 
-  const effectiveTransport = transportOverride ?? profile?.preferred_transport ?? undefined;
+  const effectiveTransport = options.transportOverride ?? profile?.preferred_transport ?? undefined;
 
   const fullText = await getRecommendations({
     title: item.title,
@@ -127,6 +139,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     travel,
     preferredTransport: effectiveTransport,
     userProfile: profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null,
+    personalizedAnswers: options.personalizedAnswers,
   });
 
   const locationName = destination?.name ?? destinationText;
@@ -134,7 +147,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   // Guarda o actualiza en la tabla recommendations
   await service.from("recommendations").upsert(
     {
-      item_id: id,
+      item_id: itemId,
       outfit_brief: item.outfit_suggestion,
       full_text: fullText,
       location_name: locationName,
@@ -153,5 +166,53 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     weather,
     travel,
     preferredTransport: effectiveTransport ?? null,
+  });
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+  const transportParam = request.nextUrl.searchParams.get("transport");
+  const transportOverride: ValidTransport | null =
+    transportParam && (VALID_TRANSPORTS as readonly string[]).includes(transportParam)
+      ? (transportParam as ValidTransport)
+      : null;
+
+  const userId = await authenticate(request);
+  if (!userId) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
+  return buildRecommendation(userId, id, { forceRefresh, transportOverride });
+}
+
+const postSchema = z.object({
+  transport: z.enum(VALID_TRANSPORTS).optional(),
+  answers: z.array(z.object({ question: z.string(), answer: z.string() })).optional(),
+  location: z.string().optional(),
+});
+
+// POST /api/items/[id]/recommendations — "Sugerencia personalizada": el
+// cliente ya le hizo unas preguntas puntuales al usuario (no a Gemini) y manda
+// las respuestas aquí para generar una recomendación nueva y más precisa.
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+
+  const userId = await authenticate(request);
+  if (!userId) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const parsed = postSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  return buildRecommendation(userId, id, {
+    forceRefresh: true,
+    transportOverride: parsed.data.transport ?? null,
+    personalizedAnswers: parsed.data.answers,
+    locationOverride: parsed.data.location,
   });
 }

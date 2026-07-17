@@ -9,9 +9,11 @@ import {
   STATUS_LABELS,
   TRANSPORT_OPTIONS,
   formatDateRange,
+  getPersonalizedQuestions,
 } from "@/lib/itemPresentation";
 import { supabase } from "@/lib/supabase";
-import { upsertItem } from "@/db/items";
+import { upsertItem, updateLocalItem } from "@/db/items";
+import { decryptClient, encryptClient } from "@/lib/crypto";
 import {
   IconX,
   IconChevronDown,
@@ -19,6 +21,7 @@ import {
   IconCompass,
   IconSunHigh,
   IconSparkles,
+  IconWand,
 } from "@tabler/icons-react";
 
 const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
@@ -49,6 +52,29 @@ export function ItemDetailModal({
   const [liveRec, setLiveRec] = useState<CachedRecommendation | null>(item.cached_recommendation ?? null);
   const [fetchingRec, setFetchingRec] = useState(false);
   const fetchedRef = useRef(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [plainDescription, setPlainDescription] = useState<string | null>(null);
+  const [plainLocation, setPlainLocation] = useState<string | null>(null);
+  const baseQuestions = getPersonalizedQuestions(item.categories ?? []);
+  // Si al item le falta ubicación, la pedimos aquí también (para clima/traslado)
+  // en vez de forzar al usuario a ir a editar la tarea.
+  const questions = plainLocation
+    ? baseQuestions
+    : [
+        {
+          id: "location",
+          question: "¿Dónde será esto? (para clima y recomendaciones)",
+          kind: "text" as const,
+          placeholder: "Calle, ciudad, país...",
+        },
+        ...baseQuestions,
+      ];
+
+  useEffect(() => {
+    decryptClient(item.description ?? null).then(setPlainDescription);
+    decryptClient(item.location ?? null).then(setPlainLocation);
+  }, [item.description, item.location]);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setVisible(true));
@@ -85,6 +111,42 @@ export function ItemDetailModal({
 
     generate();
   }, [item.id]);
+
+  async function loadPersonalized() {
+    setFetchingRec(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) return;
+
+      const locationAnswer = answers["location"]?.trim();
+      const res = await fetch(`${WEB_URL}/api/items/${item.id}/recommendations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          answers: questions
+            .filter((q) => q.id !== "location")
+            .map((q) => ({ question: q.question, answer: answers[q.id] ?? "" })),
+          location: locationAnswer || undefined,
+        }),
+      });
+      if (!res.ok) return;
+
+      const rec: CachedRecommendation = await res.json();
+      setLiveRec(rec);
+      setCustomOpen(false);
+      // El backend ya guardó la ubicación en el item (Supabase); reflejarla
+      // localmente también para que se muestre desencriptada sin esperar sync.
+      if (locationAnswer && !plainLocation) {
+        setPlainLocation(locationAnswer);
+        const encryptedLocation = await encryptClient(locationAnswer);
+        await updateLocalItem(item.id, { location: encryptedLocation }).catch(() => {});
+      }
+      await upsertItem({ ...item, cached_recommendation: rec }).catch(() => {});
+    } finally {
+      setFetchingRec(false);
+    }
+  }
 
   function close() {
     setVisible(false);
@@ -193,23 +255,83 @@ export function ItemDetailModal({
         >
           <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">Notes</p>
 
-          {item.location && (
+          {plainLocation && (
             <p className="flex items-start gap-1.5 text-sm text-muted">
               <IconMapPin size={14} className="shrink-0 mt-0.5" aria-hidden />
-              {item.location}
+              {plainLocation}
             </p>
           )}
 
-          {item.description ? (
+          {plainDescription ? (
             <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
-              {item.description}
+              {plainDescription}
             </p>
           ) : (
-            !item.location && <p className="text-sm text-muted italic">Sin notas.</p>
+            !plainLocation && <p className="text-sm text-muted italic">Sin notas.</p>
           )}
 
+          {/* ── Sugerencia personalizada ──────────────────────────────── */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setCustomOpen((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted"
+            >
+              <IconWand size={13} aria-hidden />
+              Sugerencia personalizada
+            </button>
+
+            {customOpen && (
+              <div className="mt-2 rounded-xl border border-border-soft bg-background px-3 py-3 space-y-3">
+                <p className="text-xs text-muted">
+                  Responde lo que aplique — con esto la recomendación es más precisa.
+                </p>
+                {questions.map((q) => (
+                  <div key={q.id}>
+                    <p className="text-xs font-medium mb-1.5">{q.question}</p>
+                    {q.kind === "choice" ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {q.options?.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() =>
+                              setAnswers((prev) => ({ ...prev, [q.id]: prev[q.id] === opt ? "" : opt }))
+                            }
+                            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                              answers[q.id] === opt
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-border-soft"
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <input
+                        value={answers[q.id] ?? ""}
+                        onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                        placeholder={q.placeholder}
+                        className="w-full rounded-lg border border-border-soft bg-surface px-2.5 py-2 text-xs"
+                      />
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={loadPersonalized}
+                  disabled={fetchingRec}
+                  className="w-full rounded-lg bg-foreground text-background py-2 text-xs font-medium disabled:opacity-50"
+                >
+                  {fetchingRec ? "Generando..." : "Generar recomendación personalizada"}
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* ── Generando recomendación ──────────────────────────────── */}
-          {fetchingRec && (
+          {fetchingRec && !customOpen && (
             <div className="flex items-center gap-2 text-muted text-sm">
               <IconSparkles size={14} className="shrink-0 animate-pulse" aria-hidden />
               <span>Generando recomendación...</span>

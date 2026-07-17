@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { decryptClient } from "@/lib/crypto-client";
 import Link from "next/link";
 import { sileo } from "sileo";
-import type { CachedRecommendation, Item, PreferredTransport, TravelEstimate } from "@/lib/types";
+import type { CachedRecommendation, Item, Category, PreferredTransport, TravelEstimate } from "@/lib/types";
 import {
   TYPE_BADGE_COLORS,
   TYPE_LABELS,
@@ -14,6 +14,7 @@ import {
   TRANSPORT_OPTIONS,
   STATUS_LABELS,
   formatDateRange,
+  getPersonalizedQuestions,
   type TablerIcon,
 } from "@/lib/itemPresentation";
 import {
@@ -27,6 +28,7 @@ import {
   IconVideo,
   IconSparkles,
   IconRefresh,
+  IconWand,
   IconX,
   IconChevronDown,
 } from "@tabler/icons-react";
@@ -106,11 +108,15 @@ function TravelBlock({
 
 function RecommendationsInline({
   itemId,
+  categories,
+  hasLocation,
   initial,
   selectedTransport,
   onLoad,
 }: {
   itemId: string;
+  categories: Category[];
+  hasLocation: boolean;
   initial: CachedRecommendation | null;
   selectedTransport: PreferredTransport | null;
   onLoad?: (data: CachedRecommendation) => void;
@@ -119,6 +125,22 @@ function RecommendationsInline({
   const [loading, setLoading] = useState(false);
   const prevTransport = useRef(selectedTransport);
   const fetchedItemRef = useRef<string | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const baseQuestions = getPersonalizedQuestions(categories);
+  // Si al item le falta ubicación, la pedimos aquí también (para clima/traslado)
+  // en vez de forzar al usuario a ir a editar la tarea.
+  const questions = hasLocation
+    ? baseQuestions
+    : [
+        {
+          id: "location",
+          question: "¿Dónde será esto? (para clima y recomendaciones)",
+          kind: "text" as const,
+          placeholder: "Calle, ciudad, país...",
+        },
+        ...baseQuestions,
+      ];
 
   async function load(refresh = false, transport?: PreferredTransport | null) {
     setLoading(true);
@@ -132,6 +154,36 @@ function RecommendationsInline({
       if (!res.ok) throw new Error(json.error ?? "Error");
       setData(json);
       onLoad?.(json);
+    } catch (e) {
+      sileo.error({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Error desconocido",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadPersonalized() {
+    setLoading(true);
+    try {
+      const locationAnswer = answers["location"]?.trim();
+      const res = await fetch(`/api/items/${itemId}/recommendations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transport: selectedTransport ?? undefined,
+          answers: questions
+            .filter((q) => q.id !== "location")
+            .map((q) => ({ question: q.question, answer: answers[q.id] ?? "" })),
+          location: locationAnswer || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Error");
+      setData(json);
+      onLoad?.(json);
+      setCustomOpen(false);
     } catch (e) {
       sileo.error({
         title: "Error",
@@ -183,15 +235,72 @@ function RecommendationsInline({
         <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">
           Recomendaciones
         </p>
-        <button
-          type="button"
-          onClick={() => load(true, selectedTransport)}
-          className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
-        >
-          <IconRefresh size={11} aria-hidden />
-          Actualizar
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setCustomOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+          >
+            <IconWand size={11} aria-hidden />
+            Sugerencia personalizada
+          </button>
+          <button
+            type="button"
+            onClick={() => load(true, selectedTransport)}
+            className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+          >
+            <IconRefresh size={11} aria-hidden />
+            Actualizar
+          </button>
+        </div>
       </div>
+
+      {customOpen && (
+        <div className="rounded-md border border-border-soft bg-background px-3 py-3 space-y-3">
+          <p className="text-xs text-muted">
+            Responde lo que aplique — con esto la recomendación es más precisa.
+          </p>
+          {questions.map((q) => (
+            <div key={q.id}>
+              <p className="text-xs font-medium mb-1.5">{q.question}</p>
+              {q.kind === "choice" ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {q.options?.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() =>
+                        setAnswers((prev) => ({ ...prev, [q.id]: prev[q.id] === opt ? "" : opt }))
+                      }
+                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                        answers[q.id] === opt
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border-soft hover:bg-surface"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <input
+                  value={answers[q.id] ?? ""}
+                  onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                  placeholder={q.placeholder}
+                  className="w-full rounded-md border border-border-soft bg-transparent px-2.5 py-1.5 text-xs"
+                />
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={loadPersonalized}
+            className="w-full rounded-md bg-foreground text-background py-1.5 text-xs font-medium"
+          >
+            Generar recomendación personalizada
+          </button>
+        </div>
+      )}
 
       {data.travel && <TravelBlock travel={data.travel} selected={selectedTransport} />}
 
@@ -462,6 +571,8 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
             <div className="border-t border-border-soft pt-3">
               <RecommendationsInline
                 itemId={item.id}
+                categories={item.categories}
+                hasLocation={Boolean(plainLocation)}
                 initial={null}
                 selectedTransport={selectedTransport}
                 onLoad={setRecData}

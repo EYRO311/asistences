@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Goal, GoalRecurrence } from "@/lib/types";
 
 export type GoalRow = Pick<Goal, "id" | "title" | "due_date" | "recurrence_type"> & {
@@ -33,9 +34,10 @@ export function GoalList({ goals, emptyText = "Sin metas activas." }: { goals: G
         const isComplete = total > 0 && done === total;
 
         return (
-          <div
+          <Link
             key={goal.id}
-            className={`rounded-lg border border-border-soft bg-surface px-3 py-2.5 ${isComplete ? "opacity-60" : ""}`}
+            href={`/metas/${goal.id}/editar`}
+            className={`block rounded-lg border border-border-soft bg-surface px-3 py-2.5 hover:bg-background transition-colors ${isComplete ? "opacity-60" : ""}`}
           >
             <div className="flex items-center gap-2">
               <span
@@ -68,7 +70,7 @@ export function GoalList({ goals, emptyText = "Sin metas activas." }: { goals: G
                 })}
               </p>
             )}
-          </div>
+          </Link>
         );
       })}
     </div>

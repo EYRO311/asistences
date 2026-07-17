@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { GoalRecurrence } from "@/lib/types";
 import { GoalList, type GoalRow } from "@/components/GoalList";
+import { EditGoalPage } from "@/pages/EditGoalPage";
 import { AppHeader } from "@/components/AppHeader";
 import { IconPlus } from "@tabler/icons-react";
 
@@ -23,21 +24,21 @@ interface Props {
 export function GoalsPage({ session, onSettings, onNewGoal }: Props) {
   const [goals, setGoals] = useState<(GoalRow & { status: string })[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    supabase
+  const loadGoals = useCallback(async () => {
+    const { data, error: err } = await supabase
       .from("goals")
       .select("id, title, due_date, recurrence_type, status, goal_items(id, completed)")
       .eq("user_id", session.user.id)
-      .order("created_at", { ascending: true })
-      .then(({ data, error: err }) => {
-        if (cancelled) return;
-        if (err) { setError(err.message); return; }
-        setGoals((data ?? []) as (GoalRow & { status: string })[]);
-      });
-    return () => { cancelled = true; };
+      .order("created_at", { ascending: true });
+    if (err) { setError(err.message); return; }
+    setGoals((data ?? []) as (GoalRow & { status: string })[]);
   }, [session.user.id]);
+
+  useEffect(() => {
+    loadGoals();
+  }, [loadGoals]);
 
   const active = (goals ?? []).filter((g) => g.status === "active");
   const completed = (goals ?? []).filter((g) => g.status === "completed");
@@ -94,7 +95,7 @@ export function GoalsPage({ session, onSettings, onNewGoal }: Props) {
         {grouped.map(({ recurrence, label, goals: sectionGoals }) => (
           <section key={recurrence}>
             <h2 className="font-medium text-sm text-muted uppercase tracking-wide mb-2">{label}</h2>
-            <GoalList goals={sectionGoals} />
+            <GoalList goals={sectionGoals} onSelect={(g) => setEditingGoalId(g.id)} />
           </section>
         ))}
 
@@ -104,11 +105,20 @@ export function GoalsPage({ session, onSettings, onNewGoal }: Props) {
               Completadas ({completed.length})
             </summary>
             <div className="px-4 pb-3">
-              <GoalList goals={completed} />
+              <GoalList goals={completed} onSelect={(g) => setEditingGoalId(g.id)} />
             </div>
           </details>
         )}
       </div>
+
+      {editingGoalId && (
+        <EditGoalPage
+          goalId={editingGoalId}
+          onClose={() => setEditingGoalId(null)}
+          onSaved={() => { setEditingGoalId(null); loadGoals(); }}
+          onDeleted={() => { setEditingGoalId(null); loadGoals(); }}
+        />
+      )}
     </div>
   );
 }

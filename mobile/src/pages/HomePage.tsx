@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { Page } from "@/App";
 import type { Item } from "@/lib/types";
@@ -8,7 +8,11 @@ import { geocodeLocation, getDailyWeather, type DailyWeather } from "@/lib/weath
 import { supabase } from "@/lib/supabase";
 import { AppHeader } from "@/components/AppHeader";
 import { GoalList, type GoalRow } from "@/components/GoalList";
+import { EditGoalPage } from "@/pages/EditGoalPage";
 import { RecentEmails } from "@/components/RecentEmails";
+import { DecryptedText } from "@/components/DecryptedText";
+import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
+import type { PreferredTransport } from "@/lib/types";
 import {
   IconChevronDown,
   IconShirt,
@@ -107,7 +111,9 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
   const [weather, setWeather] = useState<DailyWeather | null>(null);
   const [locationName, setLocationName] = useState<string | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [preferredTransport, setPreferredTransport] = useState<PreferredTransport | null>(null);
   const [goals, setGoals] = useState<GoalRow[] | null>(null);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const today = new Date();
 
   useEffect(() => {
@@ -116,11 +122,12 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
       try {
         const { data } = await supabase
           .from("profiles")
-          .select("full_name, location")
+          .select("full_name, location, preferred_transport")
           .eq("id", session.user.id)
           .single();
         if (cancelled) return;
         if (data?.full_name) setFirstName(data.full_name.split(" ")[0]);
+        setPreferredTransport(data?.preferred_transport ?? null);
         if (!data?.location) return;
         const geo = await geocodeLocation(data.location);
         if (cancelled || !geo) return;
@@ -136,20 +143,19 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
     return () => { cancelled = true; };
   }, [session.user.id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadGoals() {
-      const { data } = await supabase
-        .from("goals")
-        .select("id, title, due_date, recurrence_type, goal_items(id, completed)")
-        .eq("user_id", session.user.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: true });
-      if (!cancelled) setGoals((data ?? []) as GoalRow[]);
-    }
-    loadGoals();
-    return () => { cancelled = true; };
+  const loadGoals = useCallback(async () => {
+    const { data } = await supabase
+      .from("goals")
+      .select("id, title, due_date, recurrence_type, goal_items(id, completed)")
+      .eq("user_id", session.user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true });
+    setGoals((data ?? []) as GoalRow[]);
   }, [session.user.id]);
+
+  useEffect(() => {
+    loadGoals();
+  }, [loadGoals]);
 
   const dayItems = items
     .map((item) => occurrenceForDate(item, today))
@@ -188,7 +194,7 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
         {goals === null ? (
           <p className="text-sm text-muted">Cargando...</p>
         ) : (
-          <GoalList goals={goals} emptyText="No tienes metas activas." />
+          <GoalList goals={goals} emptyText="No tienes metas activas." onSelect={(g) => setEditingGoalId(g.id)} />
         )}
       </section>
 
@@ -226,6 +232,11 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
           ) : (
             !weather && <p className="text-sm text-muted">Sin recomendación por ahora.</p>
           )}
+
+          <DailyRecommendationButton
+            todayItemsCount={dayItems.length}
+            preferredTransport={preferredTransport}
+          />
         </div>
       </section>
 
@@ -285,7 +296,7 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm leading-snug">{item.title}</p>
                       {item.description && (
-                        <p className="text-xs text-muted mt-0.5 line-clamp-2">{item.description}</p>
+                        <DecryptedText value={item.description} className="text-xs text-muted mt-0.5 line-clamp-2" />
                       )}
                       {timeLabel !== "Sin fecha" && (
                         <p className="text-xs text-muted mt-0.5">{timeLabel}</p>
@@ -304,6 +315,15 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
 
       {/* Abajo: correos */}
       <RecentEmails />
+
+      {editingGoalId && (
+        <EditGoalPage
+          goalId={editingGoalId}
+          onClose={() => setEditingGoalId(null)}
+          onSaved={() => { setEditingGoalId(null); loadGoals(); }}
+          onDeleted={() => { setEditingGoalId(null); loadGoals(); }}
+        />
+      )}
     </div>
   );
 }

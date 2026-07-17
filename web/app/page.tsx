@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS } from "@/lib/itemPresentation";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { GmailInbox } from "@/components/GmailInbox";
+import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
 import {
   IconSun,
   IconSunHigh,
@@ -154,11 +155,11 @@ export default async function HomePage() {
 
   const { data: profileRaw } = await service
     .from("profiles")
-    .select("full_name, location, timezone, wake_time, sleep_time")
+    .select("full_name, location, timezone, wake_time, sleep_time, preferred_transport")
     .eq("id", user.id)
-    .single<Pick<Profile, "full_name" | "location" | "timezone" | "wake_time" | "sleep_time">>();
+    .single<Pick<Profile, "full_name" | "location" | "timezone" | "wake_time" | "sleep_time" | "preferred_transport">>();
 
-  const profile = profileRaw ?? { full_name: null, location: null, timezone: "America/Mexico_City", wake_time: "06:00", sleep_time: "23:00" };
+  const profile = profileRaw ?? { full_name: null, location: null, timezone: "America/Mexico_City", wake_time: "06:00", sleep_time: "23:00", preferred_transport: null };
   const tz = profile.timezone ?? "America/Mexico_City";
   const today = todayString(tz);
   const weekday = todayISOWeekday(today);
@@ -309,6 +310,11 @@ export default async function HomePage() {
             ) : (
               !weather && <p className="text-sm text-muted">Sin recomendación por ahora.</p>
             )}
+
+            <DailyRecommendationButton
+              todayItemsCount={todayItems.length}
+              preferredTransport={profile.preferred_transport}
+            />
           </div>
         </section>
       </div>

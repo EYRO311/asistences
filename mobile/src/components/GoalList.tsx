@@ -18,7 +18,15 @@ const RECURRENCE_BADGE: Record<GoalRecurrence, string> = {
   monthly: "border-amber-400/60 text-amber-600 dark:text-amber-400",
 };
 
-export function GoalList({ goals, emptyText = "Sin metas activas." }: { goals: GoalRow[]; emptyText?: string }) {
+export function GoalList({
+  goals,
+  emptyText = "Sin metas activas.",
+  onSelect,
+}: {
+  goals: GoalRow[];
+  emptyText?: string;
+  onSelect?: (goal: GoalRow) => void;
+}) {
   if (goals.length === 0) {
     return <p className="text-sm text-muted">{emptyText}</p>;
   }
@@ -33,9 +41,12 @@ export function GoalList({ goals, emptyText = "Sin metas activas." }: { goals: G
         const isComplete = total > 0 && done === total;
 
         return (
-          <div
+          <button
             key={goal.id}
-            className={`rounded-xl border border-border-soft bg-surface px-3 py-2.5 ${isComplete ? "opacity-60" : ""}`}
+            type="button"
+            onClick={() => onSelect?.(goal)}
+            disabled={!onSelect}
+            className={`w-full text-left rounded-xl border border-border-soft bg-surface px-3 py-2.5 ${isComplete ? "opacity-60" : ""}`}
           >
             <div className="flex items-center gap-2">
               <span
@@ -68,7 +79,7 @@ export function GoalList({ goals, emptyText = "Sin metas activas." }: { goals: G
                 })}
               </p>
             )}
-          </div>
+          </button>
         );
       })}
     </div>

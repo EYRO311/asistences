@@ -1,5 +1,6 @@
 import type { Item } from "@/lib/types";
 import { TYPE_BADGE_COLORS, TYPE_DOT_COLORS, formatTimeRange, formatDateRange } from "@/lib/itemPresentation";
+import { DecryptedText } from "@/components/DecryptedText";
 
 interface Props {
   item: Item;
@@ -20,7 +21,7 @@ export function ItemCard({ item, onClick }: Props) {
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm leading-snug">{item.title}</p>
           {item.description && (
-            <p className="text-xs text-muted mt-0.5 line-clamp-1">{item.description}</p>
+            <DecryptedText value={item.description} className="text-xs text-muted mt-0.5 line-clamp-1" />
           )}
           {timeLabel !== "Sin fecha" && (
             <p className="text-xs text-muted mt-0.5">{timeLabel}</p>
