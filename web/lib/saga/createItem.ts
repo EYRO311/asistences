@@ -146,9 +146,12 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
         ).catch(() => null);
 
         const notionToken = await getNotionAccessToken(userId);
-        const result = await createItemNotionPage(notionToken, profile.notion_database_id, item, {
-          outfitSuggestion,
-        });
+        const result = await createItemNotionPage(
+          notionToken,
+          profile.notion_database_id,
+          { ...item, description: plainDescription, location: plainLocation },
+          { outfitSuggestion }
+        );
         notionPageId = result.pageId;
         notionUrl = result.url;
       } catch (err) {

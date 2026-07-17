@@ -184,9 +184,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
 
         const notionToken = await getNotionAccessToken(user.id);
-        await updateItemNotionPage(notionToken, updated.notion_page_id, profile.notion_database_id, updated, {
-          outfitSuggestion: notionOutfitSuggestion,
-        });
+        await updateItemNotionPage(
+          notionToken,
+          updated.notion_page_id,
+          profile.notion_database_id,
+          { ...updated, description: plainDescription, location: plainLocation },
+          { outfitSuggestion: notionOutfitSuggestion }
+        );
       }
     }
   } catch {

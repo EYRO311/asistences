@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Category, Effort, GoalRecurrence, ItemType, Priority, TaskStatus } from "@/lib/types";
 import {
@@ -10,13 +10,17 @@ import {
   TASK_STATUS_OPTIONS,
   deriveTypeFromCategories,
 } from "@/lib/itemPresentation";
-import { ChipGroup } from "@/components/ChipGroup";
-import { LocationField } from "@/components/LocationField";
-import { WorkSchedulePicker } from "@/components/WorkSchedulePicker";
 import { DateTimeInput } from "@/components/DateTimeInput";
+import { LocationField } from "@/components/LocationField";
+import { ChipGroup } from "@/components/ChipGroup";
 import { nextOccurrence } from "@/lib/recurrence";
 import { sileo } from "sileo";
 import { encryptClient } from "@/lib/crypto-client";
+
+// Categorías de meta no incluyen "Evento" (solo aplica a tareas)
+const GOAL_CATEGORY_OPTIONS = CATEGORY_OPTIONS.filter((c) => c !== "Evento");
+
+type FormMode = "rapida" | "completa";
 
 // ── Modo de creación ──────────────────────────────────────────────────────────
 type CreationMode = "tarea" | "meta" | "rutina";
@@ -72,6 +76,8 @@ function NewItemForm() {
 
   // ── Modo seleccionado ──
   const [mode, setMode] = useState<CreationMode>(forcedMode === "meta" ? "meta" : "tarea");
+  // ── Creación rápida (lo mínimo) vs completa (todos los campos) ──
+  const [formMode, setFormMode] = useState<FormMode>("rapida");
 
   // ── Campos comunes ──
   const [title, setTitle] = useState("");
@@ -82,15 +88,12 @@ function NewItemForm() {
   // El tipo (compromiso/personal/evento) ya no se elige a mano: se deriva de
   // la categoría seleccionada (ver deriveTypeFromCategories).
   const itemSubtype: ItemType = deriveTypeFromCategories(categories);
-  const [allDay, setAllDay] = useState(false);
-  // null = sigue el default del tipo derivado; boolean = el usuario lo cambió a mano.
-  const [addToCalendarOverride, setAddToCalendarOverride] = useState<boolean | null>(null);
-  const addToCalendar =
-    addToCalendarOverride ?? (ITEM_SUBTYPES.find((o) => o.value === itemSubtype)?.defaultCalendar ?? true);
+  const addToCalendar = ITEM_SUBTYPES.find((o) => o.value === itemSubtype)?.defaultCalendar ?? true;
   const now = new Date();
-  const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
   const [startTime, setStartTime] = useState(toLocalInputValue(now));
-  const [endTime, setEndTime] = useState(toLocalInputValue(inOneHour));
+  // ── Tarea (solo creación completa) ──
+  const [allDay, setAllDay] = useState(false);
+  const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [priority, setPriority] = useState<Priority | null>(null);
   const [effort, setEffort] = useState<Effort | null>(null);
@@ -104,28 +107,20 @@ function NewItemForm() {
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
   const [recurrenceStartTime, setRecurrenceStartTime] = useState("09:00");
   const [recurrenceEndTime, setRecurrenceEndTime] = useState("18:00");
-  const [routineLocation, setRoutineLocation] = useState("");
 
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/profile")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.profile?.location) {
-          setLocation(d.profile.location);
-          setRoutineLocation(d.profile.location);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   function handleModeChange(m: CreationMode) {
     setMode(m);
     setTitle("");
     setDescription("");
     setCategories([]);
-    setAddToCalendarOverride(null);
+    setAllDay(false);
+    setEndTime("");
+    setLocation("");
+    setPriority(null);
+    setEffort(null);
+    setTaskStatus("sin_empezar");
   }
 
   function toggleCategory(category: Category) {
@@ -149,12 +144,14 @@ function NewItemForm() {
         // ── Crear meta ──
         const payload: Record<string, unknown> = {
           title,
-          description: description || undefined,
           recurrence_type: goalRecurrence,
-          categories,
         };
         if (goalRecurrence === "none" && dueDate) {
           payload.due_date = new Date(dueDate).toISOString();
+        }
+        if (formMode === "completa") {
+          payload.description = description || undefined;
+          payload.categories = categories;
         }
         const res = await fetch("/api/goals", {
           method: "POST",
@@ -181,9 +178,6 @@ function NewItemForm() {
         const payload: Record<string, unknown> = {
           type: "personal",
           title,
-          description: description ? await encryptClient(description) : undefined,
-          categories,
-          location: routineLocation ? await encryptClient(routineLocation) : undefined,
           recurrence_days: recurrenceDays,
           recurrence_start_time: recurrenceStartTime,
           recurrence_end_time: recurrenceEndTime,
@@ -191,6 +185,11 @@ function NewItemForm() {
           end_time: occurrence.end.toISOString(),
           add_to_calendar: true,
         };
+        if (formMode === "completa") {
+          payload.description = description ? await encryptClient(description) : undefined;
+          payload.location = location ? await encryptClient(location) : undefined;
+          payload.categories = categories;
+        }
         const res = await fetch("/api/items", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -205,20 +204,25 @@ function NewItemForm() {
       }
 
       // ── Crear tarea ──
+      const start = new Date(startTime);
+      const defaultEnd = new Date(start.getTime() + 60 * 60 * 1000);
       const payload: Record<string, unknown> = {
         type: itemSubtype,
         title,
         description: description ? await encryptClient(description) : undefined,
-        all_day: allDay,
+        all_day: formMode === "completa" ? allDay : false,
         add_to_calendar: addToCalendar,
-        task_status: taskStatus,
         categories,
-        location: location ? await encryptClient(location) : undefined,
-        start_time: new Date(startTime).toISOString(),
-        end_time: new Date(endTime).toISOString(),
+        start_time: start.toISOString(),
+        end_time: formMode === "completa" && endTime ? new Date(endTime).toISOString() : defaultEnd.toISOString(),
       };
-      if (priority) payload.priority = priority;
-      if (effort) payload.effort = effort;
+
+      if (formMode === "completa") {
+        payload.location = location ? await encryptClient(location) : undefined;
+        if (priority) payload.priority = priority;
+        if (effort) payload.effort = effort;
+        payload.task_status = taskStatus;
+      }
 
       const res = await fetch("/api/items", {
         method: "POST",
@@ -275,6 +279,24 @@ function NewItemForm() {
       </div>
       )}
 
+      {/* ── Rápida vs completa ── */}
+      <div className="flex gap-2 mb-6">
+        {(["rapida", "completa"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setFormMode(m)}
+            className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+              formMode === m
+                ? "border-foreground bg-foreground text-background"
+                : "border-border-soft hover:border-foreground/40"
+            }`}
+          >
+            {m === "rapida" ? "Creación rápida" : "Creación completa"}
+          </button>
+        ))}
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-5">
 
         {/* ════════════ TAREA ════════════ */}
@@ -283,62 +305,58 @@ function NewItemForm() {
             <CategoriesField categories={categories} onToggle={toggleCategory} />
 
             <TitleField value={title} onChange={setTitle} />
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Fecha y hora</label>
+              <DateTimeInput id="start_time" value={startTime} onChange={setStartTime} allDay={false} />
+            </div>
+
             <DescriptionField value={description} onChange={setDescription} />
 
-            <div className="flex items-center gap-2">
-              <input
-                id="all_day"
-                type="checkbox"
-                checked={allDay}
-                onChange={(e) => setAllDay(e.target.checked)}
-              />
-              <label htmlFor="all_day" className="text-sm">Todo el día</label>
-            </div>
+            {formMode === "completa" ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="all_day"
+                    type="checkbox"
+                    checked={allDay}
+                    onChange={(e) => setAllDay(e.target.checked)}
+                  />
+                  <label htmlFor="all_day" className="text-sm">Todo el día</label>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Inicio</label>
-                <DateTimeInput id="start_time" value={startTime} onChange={setStartTime} allDay={allDay} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Fin</label>
-                <DateTimeInput id="end_time" value={endTime} onChange={setEndTime} allDay={allDay} />
-              </div>
-            </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Fin (opcional)</label>
+                  <DateTimeInput id="end_time" value={endTime} onChange={setEndTime} allDay={allDay} />
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Ubicación</label>
-              <LocationField id="location" value={location} onChange={setLocation} placeholder="Calle, ciudad..." />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="location">
+                    Ubicación (para clima y recomendaciones)
+                  </label>
+                  <LocationField id="location" value={location} onChange={setLocation} placeholder="Calle, ciudad, país..." />
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Prioridad</label>
-              <ChipGroup options={PRIORITY_OPTIONS} value={priority} onChange={setPriority} allowClear />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Prioridad</label>
+                  <ChipGroup options={PRIORITY_OPTIONS} value={priority} onChange={setPriority} allowClear />
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Esfuerzo</label>
-              <ChipGroup options={EFFORT_OPTIONS} value={effort} onChange={setEffort} allowClear />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Nivel de esfuerzo</label>
+                  <ChipGroup options={EFFORT_OPTIONS} value={effort} onChange={setEffort} allowClear />
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Estado</label>
-              <ChipGroup
-                options={TASK_STATUS_OPTIONS}
-                value={taskStatus}
-                onChange={(v) => setTaskStatus(v ?? "sin_empezar")}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="add_to_calendar"
-                type="checkbox"
-                checked={addToCalendar}
-                onChange={(e) => setAddToCalendarOverride(e.target.checked)}
-              />
-              <label htmlFor="add_to_calendar" className="text-sm">Agregar a Google Calendar</label>
-            </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Estado</label>
+                  <ChipGroup options={TASK_STATUS_OPTIONS} value={taskStatus} onChange={(v) => setTaskStatus(v ?? "sin_empezar")} />
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-muted">
+                Puedes agregar ubicación, prioridad y más después, editando la tarea.
+              </p>
+            )}
           </>
         )}
 
@@ -346,7 +364,6 @@ function NewItemForm() {
         {mode === "meta" && (
           <>
             <TitleField value={title} onChange={setTitle} />
-            <DescriptionField value={description} onChange={setDescription} />
 
             <div>
               <label className="block text-sm font-medium mb-2">Frecuencia</label>
@@ -386,7 +403,31 @@ function NewItemForm() {
               </div>
             )}
 
-            <CategoriesField categories={categories} onToggle={toggleCategory} />
+            {formMode === "completa" && (
+              <>
+                <DescriptionField value={description} onChange={setDescription} />
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Categoría</label>
+                  <div className="flex flex-wrap gap-2">
+                    {GOAL_CATEGORY_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => toggleCategory(c)}
+                        className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                          categories.includes(c)
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border-soft"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             <p className="text-xs text-muted">
               Después de crear la meta podrás agregar los elementos del checklist.
@@ -398,7 +439,6 @@ function NewItemForm() {
         {mode === "rutina" && (
           <>
             <TitleField value={title} onChange={setTitle} />
-            <DescriptionField value={description} onChange={setDescription} />
 
             <div>
               <label className="block text-sm font-medium mb-2">Días de la semana</label>
@@ -441,27 +481,42 @@ function NewItemForm() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Ubicación (opcional)</label>
-              <LocationField
-                id="routine_location"
-                value={routineLocation}
-                onChange={setRoutineLocation}
-                placeholder="Gimnasio, oficina..."
-              />
-            </div>
+            {formMode === "completa" ? (
+              <>
+                <DescriptionField value={description} onChange={setDescription} />
 
-            <CategoriesField categories={categories} onToggle={toggleCategory} />
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="location">
+                    Ubicación
+                  </label>
+                  <LocationField id="location" value={location} onChange={setLocation} placeholder="Calle, ciudad, país..." />
+                </div>
 
-            <WorkSchedulePicker
-              label="Horario"
-              days={recurrenceDays}
-              onToggleDay={toggleRecurrenceDay}
-              startTime={recurrenceStartTime}
-              endTime={recurrenceEndTime}
-              onStartTimeChange={setRecurrenceStartTime}
-              onEndTimeChange={setRecurrenceEndTime}
-            />
+                <div>
+                  <label className="block text-sm font-medium mb-1">Categoría</label>
+                  <div className="flex flex-wrap gap-2">
+                    {CATEGORY_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => toggleCategory(c)}
+                        className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                          categories.includes(c)
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border-soft"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-muted">
+                Puedes agregar descripción, ubicación y categoría después, editando la rutina.
+              </p>
+            )}
           </>
         )}
 

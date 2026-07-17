@@ -69,6 +69,59 @@ export function deriveTypeFromCategories(categories: Category[]): ItemType {
   return "compromiso";
 }
 
+// ── Sugerencia personalizada ──────────────────────────────────────────────────
+// Preguntas que la app decide hacer (sin pedirle a Gemini que las invente),
+// según la categoría/tipo de la tarea, para darle a Gemini información
+// puntual y generar una recomendación más precisa.
+
+export interface PersonalizedQuestion {
+  id: string;
+  question: string;
+  kind: "choice" | "text";
+  options?: string[];
+  placeholder?: string;
+}
+
+export function getPersonalizedQuestions(categories: Category[]): PersonalizedQuestion[] {
+  const questions: PersonalizedQuestion[] = [];
+
+  if (categories.includes("Trabajo")) {
+    questions.push({
+      id: "dress_code",
+      question: "¿Cuál es el código de vestimenta del trabajo?",
+      kind: "choice",
+      options: ["Formal", "Business casual", "Casual", "Uniforme"],
+    });
+  }
+
+  if (categories.includes("Escuela") || categories.includes("Cursos extras")) {
+    questions.push({
+      id: "activity_type",
+      question: "¿Qué tipo de actividad es hoy?",
+      kind: "choice",
+      options: ["Clase normal", "Examen o presentación", "Actividad física", "Salida o evento especial"],
+    });
+  }
+
+  if (categories.includes("Salud")) {
+    questions.push({
+      id: "health_activity",
+      question: "¿Qué tipo de cita o actividad es?",
+      kind: "choice",
+      options: ["Consulta médica", "Ejercicio o deporte", "Otro"],
+    });
+  }
+
+  questions.push({
+    id: "extra_context",
+    question: "¿Algo más que deba tomar en cuenta?",
+    kind: "text",
+    placeholder: "Ej. voy a estar de pie todo el día, hay mucho aire acondicionado...",
+  });
+
+  return questions;
+}
+
 // Tag correspondiente en la columna "rutina" (multi_select) de Notion.
 export const RECURRING_CATEGORY_NOTION_TAG: Record<string, string> = {
   Trabajo: "trabajo",

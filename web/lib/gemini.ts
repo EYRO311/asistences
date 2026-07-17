@@ -23,8 +23,11 @@ function userProfileLine(profile?: UserProfile | null): string | null {
   return parts.length ? `Usuario: ${parts.join(", ")}.` : null;
 }
 
-// Tries the configured model first; if it fails (quota/rate limit), falls back
-// through FALLBACK_MODELS until one works or all fail.
+// Tries the configured model first; if it fails for ANY reason (quota,
+// deprecated/not-found, etc.), falls through FALLBACK_MODELS until one works
+// or all fail. A model being deprecated is just as valid a reason to move to
+// the next candidate as hitting a quota limit — so every failure is treated
+// the same way here instead of only retrying on 429s.
 async function generateWithFallback(apiKey: string, prompt: string): Promise<string | null> {
   const primaryModel = process.env.GEMINI_MODEL || DEFAULT_MODEL;
   const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
@@ -38,16 +41,11 @@ async function generateWithFallback(apiKey: string, prompt: string): Promise<str
       if (text) return text;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      // 429 = quota/rate limit → try next model; anything else → stop
-      if (!msg.includes('"code":429') && !msg.includes("429") && !msg.includes("RESOURCE_EXHAUSTED")) {
-        console.error(`Gemini [${model}] failed (non-quota):`, msg.slice(0, 200));
-        return null;
-      }
-      console.warn(`Gemini [${model}] quota exceeded, trying next model...`);
+      console.warn(`Gemini [${model}] failed, trying next model...`, msg.slice(0, 200));
     }
   }
 
-  console.error("Gemini: all models exhausted or quota exceeded.");
+  console.error("Gemini: all models exhausted or failed.");
   return null;
 }
 
@@ -135,6 +133,9 @@ export interface RecommendationContext {
   } | null;
   preferredTransport?: "car" | "bike" | "public_transport" | "walking" | null;
   userProfile?: UserProfile | null;
+  // Respuestas a preguntas puntuales que la app (no Gemini) decidió hacerle al
+  // usuario según la categoría de la tarea (ver getPersonalizedQuestions).
+  personalizedAnswers?: { question: string; answer: string }[];
 }
 
 /**
@@ -177,6 +178,79 @@ export async function getRecommendations(context: RecommendationContext): Promis
           context.preferredTransport === "bike" ? "bici" :
           context.preferredTransport === "public_transport" ? "transporte público" : "a pie"
         }. Enfoca la sugerencia de salida en ese medio.`
+      : null,
+    context.personalizedAnswers?.length
+      ? [
+          "El usuario respondió estas preguntas puntuales sobre la tarea — úsalas para afinar la",
+          "recomendación (por ejemplo, si dio un código de vestimenta, respétalo en vez de adivinar):",
+          ...context.personalizedAnswers
+            .filter((a) => a.answer.trim())
+            .map((a) => `- ${a.question} → ${a.answer.trim()}`),
+        ].join("\n")
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return generateWithFallback(apiKey, prompt);
+}
+
+export interface DailyRecommendationContext {
+  items: { title: string; categories: string[] }[];
+  locationName?: string | null;
+  weather?: WeatherSummary | null;
+  preferredTransport?: "car" | "bike" | "public_transport" | "walking" | null;
+  // null cuando solo hay una tarea (la pregunta se omite); si hay varias,
+  // true/false según lo que respondió el usuario.
+  sameOutfitForAll?: boolean | null;
+  // Código de vestimenta u outfit que el usuario ya tenía pensado — si viene,
+  // Gemini solo lo valida/ajusta con el clima en vez de inventarlo (menos tokens).
+  outfitIdea?: string | null;
+  userProfile?: UserProfile | null;
+}
+
+/**
+ * Recomendación única para todo el día (botón "Recomendación automática" en
+ * Inicio), en vez de una por tarea. El prompt es deliberadamente corto —
+ * solo títulos y categorías de las tareas de hoy, no descripciones completas —
+ * para gastar menos tokens, y usa las respuestas puntuales del usuario
+ * (transporte, outfit ya pensado) en vez de pedirle a Gemini que las adivine.
+ */
+export async function getDailyRecommendation(context: DailyRecommendationContext): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = [
+    "Da una recomendación breve (máximo 6-7 líneas) para el día completo del usuario: qué ponerse,",
+    "qué llevar, y cómo/cuándo salir, tomando en cuenta el clima y el transporte si los tengo disponibles.",
+    "Si el clima sugiere algo distinto a lo obvio (frío, lluvia, calor extremo), acláralo explícitamente.",
+    "Adapta las sugerencias al perfil del usuario si está disponible.",
+    "Responde directo con las recomendaciones, sin encabezados ni comillas.",
+    userProfileLine(context.userProfile),
+    "Tareas de hoy:",
+    ...context.items.map(
+      (i) => `- ${i.title}${i.categories.length ? ` (${i.categories.join(", ")})` : ""}`
+    ),
+    context.locationName ? `Ubicación: ${context.locationName}` : null,
+    context.weather
+      ? `Clima hoy: ${context.weather.description}, máx ${Math.round(context.weather.tempMaxC)}°C, mín ${Math.round(
+          context.weather.tempMinC
+        )}°C, probabilidad de lluvia ${context.weather.precipitationProbability}%.`
+      : null,
+    context.preferredTransport
+      ? `Medio de transporte: ${
+          context.preferredTransport === "car" ? "auto" :
+          context.preferredTransport === "bike" ? "bici" :
+          context.preferredTransport === "public_transport" ? "transporte público" : "a pie"
+        }. Enfoca la sugerencia de salida en ese medio.`
+      : null,
+    context.sameOutfitForAll === false
+      ? "El usuario prefiere variar de outfit entre tareas: sugiere una base versátil y qué ajustar entre una tarea y otra."
+      : context.sameOutfitForAll === true
+      ? "El usuario quiere un solo outfit para todas sus tareas de hoy."
+      : null,
+    context.outfitIdea
+      ? `El usuario ya tiene esto pensado para su outfit/código de vestimenta de hoy: "${context.outfitIdea}". No lo inventes desde cero, solo valídalo o ajústalo según el clima.`
       : null,
   ]
     .filter(Boolean)
