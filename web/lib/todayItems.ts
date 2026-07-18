@@ -44,6 +44,15 @@ export function occurrenceToday(item: Item, todayStr: string): Item {
   return { ...item, start_time: start.toISOString(), end_time: end.toISOString() };
 }
 
+/**
+ * true si `isoDate` cae en un día calendario ANTERIOR a hoy en la zona `tz`.
+ * Se usa para no generar recomendaciones (clima/outfit) de tareas atrasadas
+ * o importadas con fecha pasada — el pronóstico ya no aplica para ese día.
+ */
+export function isPastDay(isoDate: string, tz: string): boolean {
+  return localDateStr(isoDate, tz) < todayString(tz);
+}
+
 /** Filtra y proyecta los items de `items` que ocurren hoy en la zona `tz`. */
 export function getTodayItems(items: Item[], tz: string): Item[] {
   const todayStr = todayString(tz);
