@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { fullSync, forceSyncAll } from "@/lib/sync";
-import { getAllItems, getPendingCount } from "@/db/items";
+import { getAllItems, getPendingCount, updateLocalItem } from "@/db/items";
+import { computeAutoTaskStatus } from "@/lib/taskStatus";
 import { Network } from "@capacitor/network";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -93,6 +94,30 @@ export default function App() {
     setItems(fresh);
     setPendingCount(count);
   }
+
+  // Al iniciar sesión, corrige el estado de las tareas (sin_empezar/en_curso/
+  // listo) según la hora actual — funciona offline, es local y se sincroniza
+  // después como cualquier otro cambio.
+  useEffect(() => {
+    if (!session?.user) return;
+
+    (async () => {
+      try {
+        const localItems = await getAllItems();
+        const now = new Date();
+        const updates = localItems
+          .map((item) => ({ item, expected: computeAutoTaskStatus(item, now) }))
+          .filter((u): u is { item: Item; expected: NonNullable<typeof u.expected> } => Boolean(u.expected) && u.expected !== u.item.task_status);
+
+        if (updates.length === 0) return;
+        await Promise.all(updates.map(({ item, expected }) => updateLocalItem(item.id, { task_status: expected })));
+        await refreshItems();
+      } catch (err) {
+        console.error("Auto task status sync failed:", err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   useEffect(() => {
     if (!session?.user) return;
