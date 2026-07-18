@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
   // que usar la misma lógica que ya usa Inicio para resolverlas.
   const { data: allItemsRaw } = await service
     .from("items")
-    .select("title, description, location, categories, start_time, end_time, all_day, recurrence_days, recurrence_start_time, recurrence_end_time")
+    .select("id, title, description, location, categories, start_time, end_time, all_day, recurrence_days, recurrence_start_time, recurrence_end_time")
     .eq("user_id", userId)
     .neq("status", "cancelled");
 
@@ -223,6 +223,28 @@ export async function POST(request: NextRequest) {
   );
   if (upsertError) {
     console.error("daily_recommendations upsert failed:", upsertError.message);
+  }
+
+  // Si es para más de una tarea, la recomendación del día también se guarda
+  // como la recomendación de cada una de esas tareas (marcada is_daily) para
+  // que aparezca directo al abrir cualquiera de ellas. Si luego se regenera
+  // una en específico, esa deja de estar marcada como del día completo.
+  if (todayItems.length > 1) {
+    const itemRows = todayItems.map((i) => ({
+      item_id: i.id,
+      outfit_brief: null,
+      full_text: fullText,
+      location_name: resolvedLocation,
+      weather,
+      travel: null,
+      preferred_transport: effectiveTransport,
+      is_daily: true,
+      generated_at: new Date().toISOString(),
+    }));
+    const { error: fanOutError } = await service.from("recommendations").upsert(itemRows, { onConflict: "item_id" });
+    if (fanOutError) {
+      console.error("recommendations upsert (daily fan-out) failed:", fanOutError.message);
+    }
   }
 
   return NextResponse.json({ recommendation: fullText, generatedAt: new Date().toISOString() });

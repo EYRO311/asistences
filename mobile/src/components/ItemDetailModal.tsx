@@ -386,8 +386,15 @@ export function ItemDetailModal({
 
           {/* ── Recomendación IA ─────────────────────────────────────── */}
           {(rec?.recommendation ?? item.outfit_suggestion) && (
-            <div className="rounded-xl border border-border-soft bg-background px-4 py-3 font-handwriting text-xl leading-relaxed">
-              {rec?.recommendation ?? item.outfit_suggestion}
+            <div className="rounded-xl border border-border-soft bg-background px-4 py-3 space-y-1.5">
+              {rec?.isDaily && (
+                <p className="text-[9px] font-semibold text-muted uppercase tracking-widest">
+                  Recomendación de todo el día — si la regeneras, será solo para esta tarea
+                </p>
+              )}
+              <p className="font-handwriting text-xl leading-relaxed">
+                {rec?.recommendation ?? item.outfit_suggestion}
+              </p>
             </div>
           )}
 

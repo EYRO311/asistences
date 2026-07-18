@@ -80,6 +80,7 @@ async function buildRecommendation(
         weather: existing.weather,
         travel: existing.travel,
         preferredTransport: existing.preferred_transport,
+        isDaily: existing.is_daily,
       });
     }
   }
@@ -160,7 +161,9 @@ async function buildRecommendation(
 
   const locationName = destination?.name ?? destinationText;
 
-  // Guarda o actualiza en la tabla recommendations
+  // Guarda o actualiza en la tabla recommendations — is_daily siempre en
+  // false aquí: esta rama genera una recomendación específica para este
+  // item (aunque antes tuviera la del día completo, deja de aplicar).
   await service.from("recommendations").upsert(
     {
       item_id: itemId,
@@ -170,6 +173,7 @@ async function buildRecommendation(
       weather,
       travel,
       preferred_transport: effectiveTransport ?? null,
+      is_daily: false,
       generated_at: new Date().toISOString(),
     },
     { onConflict: "item_id" }
@@ -182,6 +186,7 @@ async function buildRecommendation(
     weather,
     travel,
     preferredTransport: effectiveTransport ?? null,
+    isDaily: false,
   });
 }
 

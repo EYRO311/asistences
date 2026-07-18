@@ -23,7 +23,7 @@ export function DailyRecommendationButton({
   const [panelOpen, setPanelOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [sameOutfit, setSameOutfit] = useState<boolean | null>(null);
+  const [sameOutfit, setSameOutfit] = useState<boolean | null>(true);
   const [useRegistered, setUseRegistered] = useState<boolean | null>(null);
   const [transportChoice, setTransportChoice] = useState<PreferredTransport | null>(null);
   const [outfitIdea, setOutfitIdea] = useState("");
