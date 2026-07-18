@@ -1,12 +1,85 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { getDailyRecommendation } from "@/lib/gemini";
-import { geocodeLocation, getDailyWeather } from "@/lib/weather";
+import { getDailyRecommendation, type DailyLeg } from "@/lib/gemini";
+import { geocodeLocation, getDailyWeather, type GeocodedLocation } from "@/lib/weather";
+import { estimateTravel } from "@/lib/travel";
 import { toLocalDateStr } from "@/lib/freeSlots";
 import { getTodayItems } from "@/lib/todayItems";
 import { decrypt } from "@/lib/crypto";
 import type { Item, Profile } from "@/lib/types";
+
+interface TimedTodayItem {
+  title: string;
+  start: Date;
+  end: Date;
+  location: string | null;
+}
+
+/**
+ * Construye los traslados entre actividades del día (y desde tu ubicación a
+ * la primera), con el tiempo libre disponible y la distancia/tiempo estimado
+ * cuando las ubicaciones cambian, para que el modelo pueda avisar si el hueco
+ * entre una actividad y otra no alcanza para llegar.
+ */
+async function buildDailyLegs(
+  timedItems: TimedTodayItem[],
+  originLocation: string | null
+): Promise<DailyLeg[]> {
+  const legs: DailyLeg[] = [];
+  const geocodeCache = new Map<string, GeocodedLocation | null>();
+
+  async function resolve(location: string | null): Promise<GeocodedLocation | null> {
+    if (!location) return null;
+    const key = location.trim().toLowerCase();
+    if (!geocodeCache.has(key)) {
+      geocodeCache.set(key, await geocodeLocation(location).catch(() => null));
+    }
+    return geocodeCache.get(key) ?? null;
+  }
+
+  let prevLabel = "Tu ubicación";
+  let prevLocation = originLocation;
+  let prevEnd: Date | null = null;
+
+  for (const item of timedItems) {
+    const gapMinutes = prevEnd ? Math.round((item.start.getTime() - prevEnd.getTime()) / 60_000) : null;
+    const sameLocation = Boolean(
+      prevLocation && item.location && prevLocation.trim().toLowerCase() === item.location.trim().toLowerCase()
+    );
+
+    let leg: DailyLeg | null = null;
+    if (prevLocation && item.location && !sameLocation) {
+      const [from, to] = await Promise.all([resolve(prevLocation), resolve(item.location)]);
+      if (from && to) {
+        const travel = await estimateTravel(from, to).catch(() => null);
+        if (travel) {
+          leg = {
+            fromLabel: prevLabel,
+            toLabel: item.title,
+            gapMinutes,
+            distanceKm: travel.distanceKm,
+            car: travel.car,
+            bike: travel.bike,
+            publicTransport: travel.publicTransport,
+          };
+        }
+      }
+    } else if (gapMinutes !== null) {
+      // Misma ubicación (o falta en alguna) — igual reporta el tiempo libre,
+      // sin datos de traslado.
+      leg = { fromLabel: prevLabel, toLabel: item.title, gapMinutes };
+    }
+    if (leg) legs.push(leg);
+
+    prevLabel = item.title;
+    // Si el evento no tiene ubicación registrada, se asume que sigues donde estabas.
+    prevLocation = item.location ?? prevLocation;
+    prevEnd = item.end;
+  }
+
+  return legs;
+}
 
 const VALID_TRANSPORTS = ["car", "bike", "public_transport", "walking"] as const;
 type ValidTransport = (typeof VALID_TRANSPORTS)[number];
@@ -86,7 +159,7 @@ export async function POST(request: NextRequest) {
   // que usar la misma lógica que ya usa Inicio para resolverlas.
   const { data: allItemsRaw } = await service
     .from("items")
-    .select("title, description, categories, start_time, end_time, all_day, recurrence_days, recurrence_start_time, recurrence_end_time")
+    .select("title, description, location, categories, start_time, end_time, all_day, recurrence_days, recurrence_start_time, recurrence_end_time")
     .eq("user_id", userId)
     .neq("status", "cancelled");
 
@@ -95,6 +168,20 @@ export async function POST(request: NextRequest) {
   if (todayItems.length === 0) {
     return NextResponse.json({ error: "No tienes tareas hoy" }, { status: 422 });
   }
+
+  // Traslados entre actividades con hora (para huecos y estimación de tiempos);
+  // los de todo el día no aplican para esto.
+  const timedTodayItems: TimedTodayItem[] = todayItems
+    .filter((i): i is Item & { start_time: string } => !i.all_day && Boolean(i.start_time))
+    .map((i) => ({
+      title: i.title,
+      start: new Date(i.start_time),
+      end: i.end_time ? new Date(i.end_time) : new Date(new Date(i.start_time).getTime() + 60 * 60 * 1000),
+      location: decrypt(i.location),
+    }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const legs = await buildDailyLegs(timedTodayItems, profile?.location ?? null);
 
   const effectiveTransport: ValidTransport | null = parsed.data.transport ?? profile?.preferred_transport ?? null;
 
@@ -112,6 +199,7 @@ export async function POST(request: NextRequest) {
       categories: i.categories ?? [],
       description: decrypt(i.description),
     })),
+    legs,
     locationName: resolvedLocation,
     weather,
     preferredTransport: effectiveTransport,

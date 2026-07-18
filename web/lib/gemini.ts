@@ -195,8 +195,25 @@ export async function getRecommendations(context: RecommendationContext): Promis
   return generateWithFallback(apiKey, prompt);
 }
 
+export interface DailyLeg {
+  fromLabel: string;
+  toLabel: string;
+  // Minutos libres entre que termina "fromLabel" y empieza "toLabel"; null si
+  // no se pudo calcular (p. ej. es el primer traslado del día).
+  gapMinutes: number | null;
+  // Solo presentes cuando las ubicaciones de origen/destino son distintas.
+  distanceKm?: number;
+  car?: { minutes: number; leaveMinutesBefore: number };
+  bike?: { minutes: number; leaveMinutesBefore: number };
+  publicTransport?: { minutes: number; leaveMinutesBefore: number };
+}
+
 export interface DailyRecommendationContext {
   items: { title: string; categories: string[]; description?: string | null }[];
+  // Traslados/huecos entre actividades consecutivas (y desde la ubicación del
+  // usuario a la primera), para que el modelo pueda avisar si el tiempo entre
+  // una y otra no alcanza para llegar.
+  legs?: DailyLeg[];
   locationName?: string | null;
   weather?: WeatherSummary | null;
   preferredTransport?: "car" | "bike" | "public_transport" | "walking" | null;
@@ -224,6 +241,8 @@ export async function getDailyRecommendation(context: DailyRecommendationContext
     "Da una recomendación breve (máximo 6-7 líneas) para el día completo del usuario: qué ponerse,",
     "qué llevar, y cómo/cuándo salir, tomando en cuenta el clima y el transporte si los tengo disponibles.",
     "Si el clima sugiere algo distinto a lo obvio (frío, lluvia, calor extremo), acláralo explícitamente.",
+    "Si el tiempo libre entre dos actividades no alcanza para el traslado estimado entre ellas, adviértelo",
+    "explícitamente (por ejemplo, sugiriendo salir antes de que termine la actividad previa o usar un medio más rápido).",
     "Adapta las sugerencias al perfil del usuario si está disponible.",
     "Responde directo con las recomendaciones, sin encabezados ni comillas.",
     userProfileLine(context.userProfile),
@@ -234,6 +253,21 @@ export async function getDailyRecommendation(context: DailyRecommendationContext
           i.description ? `: ${i.description}` : ""
         }`
     ),
+    context.legs?.length
+      ? [
+          "Traslados y tiempos entre actividades:",
+          ...context.legs.map((l) => {
+            const parts = [`De "${l.fromLabel}" a "${l.toLabel}"`];
+            if (l.gapMinutes !== null) parts.push(`${l.gapMinutes} min libres entre ambas`);
+            if (l.distanceKm !== undefined && l.car) {
+              parts.push(
+                `ubicaciones distintas: ${l.distanceKm} km, ~${l.car.minutes} min en auto (sal con ${l.car.leaveMinutesBefore} min de anticipación), ~${l.bike?.minutes} min en bici, ~${l.publicTransport?.minutes} min en transporte público`
+              );
+            }
+            return `- ${parts.join(": ")}`;
+          }),
+        ].join("\n")
+      : null,
     context.locationName ? `Ubicación: ${context.locationName}` : null,
     context.weather
       ? `Clima hoy: ${context.weather.description}, máx ${Math.round(context.weather.tempMaxC)}°C, mín ${Math.round(
