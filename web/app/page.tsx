@@ -4,6 +4,7 @@ import type { Item, Profile } from "@/lib/types";
 import Link from "next/link";
 import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS, TYPE_LABELS } from "@/lib/itemPresentation";
 import { decrypt } from "@/lib/crypto";
+import { todayString, todayISOWeekday, isTodayItem, occurrenceToday } from "@/lib/todayItems";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { GmailInbox } from "@/components/GmailInbox";
 import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
@@ -39,47 +40,6 @@ function weatherTip(w: DailyWeather): string | null {
   if (w.precipitationProbability >= 30)
     return "Puede llover por la tarde. Ten un paraguas a la mano.";
   return null;
-}
-
-// ── Date helpers (timezone-aware, server-side) ───────────────────────────────
-
-function todayString(tz: string): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: tz }); // "YYYY-MM-DD"
-}
-
-function localDateStr(isoDate: string, tz: string): string {
-  return new Date(isoDate).toLocaleDateString("en-CA", { timeZone: tz });
-}
-
-function todayISOWeekday(todayStr: string): number {
-  // Parse the date string as local date to get weekday
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const jsDay = new Date(y, m - 1, d).getDay();
-  return jsDay === 0 ? 7 : jsDay;
-}
-
-function isTodayItem(item: Item, todayStr: string, weekday: number, tz: string): boolean {
-  if (item.start_time && localDateStr(item.start_time, tz) === todayStr) return true;
-  if (
-    item.recurrence_days?.length &&
-    item.recurrence_start_time &&
-    item.recurrence_end_time &&
-    item.start_time
-  ) {
-    const startStr = localDateStr(item.start_time, tz);
-    if (startStr <= todayStr && item.recurrence_days.includes(weekday)) return true;
-  }
-  return false;
-}
-
-function occurrenceToday(item: Item, todayStr: string): Item {
-  if (!item.recurrence_days?.length) return item;
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const [sh, sm] = item.recurrence_start_time!.split(":").map(Number);
-  const [eh, em] = item.recurrence_end_time!.split(":").map(Number);
-  const start = new Date(y, m - 1, d, sh, sm);
-  const end = new Date(y, m - 1, d, eh, em);
-  return { ...item, start_time: start.toISOString(), end_time: end.toISOString() };
 }
 
 // ── Free slots helper ────────────────────────────────────────────────────────
