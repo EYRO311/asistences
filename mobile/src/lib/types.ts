@@ -40,6 +40,10 @@ export interface CachedRecommendation {
   } | null;
   travel: TravelEstimate | null;
   preferredTransport?: PreferredTransport | null;
+  // true si esta recomendación viene de la "recomendación automática" del
+  // día (compartida con las demás tareas de hoy) en vez de ser específica
+  // de este item.
+  isDaily?: boolean;
 }
 
 export interface Item {

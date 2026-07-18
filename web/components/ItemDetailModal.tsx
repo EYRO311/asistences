@@ -305,8 +305,15 @@ function RecommendationsInline({
       {data.travel && <TravelBlock travel={data.travel} selected={selectedTransport} />}
 
       {(data.recommendation ?? data.outfit_suggestion) && (
-        <div className="rounded-md border border-border-soft bg-background px-4 py-3 font-handwriting text-xl leading-relaxed">
-          {data.recommendation ?? data.outfit_suggestion}
+        <div className="rounded-md border border-border-soft bg-background px-4 py-3 space-y-1.5">
+          {data.isDaily && (
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">
+              Recomendación de todo el día — si la regeneras, será solo para esta tarea
+            </p>
+          )}
+          <p className="font-handwriting text-xl leading-relaxed">
+            {data.recommendation ?? data.outfit_suggestion}
+          </p>
         </div>
       )}
     </div>
