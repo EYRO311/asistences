@@ -13,6 +13,7 @@ import { suggestOutfitForNotion, getRecommendations } from "@/lib/gemini";
 import { resolveLocationAndWeather, geocodeLocation, getDailyWeather } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
 import { decrypt } from "@/lib/crypto";
+import { isPastDay } from "@/lib/todayItems";
 import type { CreateItemInput, Item, Profile } from "@/lib/types";
 
 const TYPES_WITH_CALENDAR_BY_DEFAULT = new Set(["compromiso", "evento"]);
@@ -125,25 +126,36 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
     // --- Paso 3: crear página en Notion (si está configurado y conectado) ---
     const { data: profile } = await supabase
       .from("profiles")
-      .select("notion_database_id, location, full_name, age, gender, preferred_transport, extra_buffer_minutes")
+      .select("notion_database_id, location, full_name, age, gender, preferred_transport, extra_buffer_minutes, timezone")
       .eq("id", userId)
-      .single<Pick<Profile, "notion_database_id" | "location" | "full_name" | "age" | "gender" | "preferred_transport" | "extra_buffer_minutes">>();
+      .single<Pick<Profile, "notion_database_id" | "location" | "full_name" | "age" | "gender" | "preferred_transport" | "extra_buffer_minutes" | "timezone">>();
+
+    // Tareas con fecha ya pasada (importadas o registradas después de que
+    // ocurrieron): el pronóstico del clima ya no aplica, así que no se genera
+    // outfit ni recomendación para ellas.
+    const isPastItemDay = item.start_time
+      ? isPastDay(item.start_time, profile?.timezone ?? "America/Mexico_City")
+      : false;
 
     // Resuelve ubicación y clima una vez — se reutiliza en Notion y en la recomendación
     const originText = profile?.location ?? null;
     const destinationText = plainLocation ?? originText;
-    const { location: resolvedLocation, weather } = await resolveLocationAndWeather(
-      destinationText,
-      item.start_time
-    ).catch(() => ({ location: destinationText, weather: null }));
+    const { location: resolvedLocation, weather } = isPastItemDay
+      ? { location: destinationText, weather: null }
+      : await resolveLocationAndWeather(destinationText, item.start_time).catch(() => ({
+          location: destinationText,
+          weather: null,
+        }));
 
     if (profile?.notion_database_id) {
       try {
         const userProfile = { name: profile.full_name, age: profile.age, gender: profile.gender };
 
-        outfitSuggestion = await suggestOutfitForNotion(
-          item.title, plainDescription, resolvedLocation, weather, userProfile
-        ).catch(() => null);
+        outfitSuggestion = isPastItemDay
+          ? null
+          : await suggestOutfitForNotion(
+              item.title, plainDescription, resolvedLocation, weather, userProfile
+            ).catch(() => null);
 
         const notionToken = await getNotionAccessToken(userId);
         const result = await createItemNotionPage(
@@ -158,7 +170,7 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
         const msg = err instanceof Error ? err.message : "";
         if (!msg.includes("no tiene conectada")) throw err;
       }
-    } else if (destinationText) {
+    } else if (destinationText && !isPastItemDay) {
       // Sin Notion: igualmente genera el outfit para mostrarlo en la app
       outfitSuggestion = await suggestOutfitForNotion(
         item.title, plainDescription, resolvedLocation, weather,
@@ -185,19 +197,23 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
     }
 
     // --- Paso 5: generar recomendación completa y guardarla (best-effort, no revierte) ---
-    generateAndSaveRecommendation(supabase, confirmedItem.id, {
-      title: confirmedItem.title,
-      description: plainDescription,
-      originText,
-      destinationText,
-      resolvedLocation,
-      weather,
-      startTime: confirmedItem.start_time,
-      outfitBrief: outfitSuggestion,
-      preferredTransport: profile?.preferred_transport ?? null,
-      extraBuffer: profile?.extra_buffer_minutes ?? 0,
-      userProfile: profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null,
-    }).catch(() => null);
+    // Se omite para tareas con fecha ya pasada — no aplica pronóstico ni tiene
+    // sentido sugerir qué llevar para un día que ya ocurrió.
+    if (!isPastItemDay) {
+      generateAndSaveRecommendation(supabase, confirmedItem.id, {
+        title: confirmedItem.title,
+        description: plainDescription,
+        originText,
+        destinationText,
+        resolvedLocation,
+        weather,
+        startTime: confirmedItem.start_time,
+        outfitBrief: outfitSuggestion,
+        preferredTransport: profile?.preferred_transport ?? null,
+        extraBuffer: profile?.extra_buffer_minutes ?? 0,
+        userProfile: profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null,
+      }).catch(() => null);
+    }
 
     return confirmedItem;
   } catch (err) {

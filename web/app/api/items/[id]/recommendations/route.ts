@@ -5,6 +5,7 @@ import { getRecommendations } from "@/lib/gemini";
 import { geocodeLocation, getDailyWeather } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
 import { decrypt, encrypt } from "@/lib/crypto";
+import { isPastDay } from "@/lib/todayItems";
 import type { Item, Profile, Recommendation } from "@/lib/types";
 
 interface RouteParams {
@@ -85,9 +86,24 @@ async function buildRecommendation(
 
   const { data: profile } = await service
     .from("profiles")
-    .select("location, preferred_transport, extra_buffer_minutes, full_name, age, gender")
+    .select("location, timezone, preferred_transport, extra_buffer_minutes, full_name, age, gender")
     .eq("id", userId)
-    .single<Pick<Profile, "location" | "preferred_transport" | "extra_buffer_minutes" | "full_name" | "age" | "gender">>();
+    .single<Pick<Profile, "location" | "timezone" | "preferred_transport" | "extra_buffer_minutes" | "full_name" | "age" | "gender">>();
+
+  // Tareas con fecha ya pasada (atrasadas o importadas): el pronóstico ya no
+  // aplica y no tiene sentido sugerir qué llevar para un día que ya ocurrió.
+  // Si ya existía una recomendación cacheada se regresó arriba; si no, no se
+  // genera una nueva.
+  if (item.start_time && isPastDay(item.start_time, profile?.timezone ?? "America/Mexico_City")) {
+    return NextResponse.json({
+      recommendation: null,
+      outfit_suggestion: item.outfit_suggestion,
+      location: itemLocation,
+      weather: null,
+      travel: null,
+      preferredTransport: null,
+    });
+  }
 
   const originText = profile?.location ?? null;
   const destinationText = itemLocation ?? originText;
