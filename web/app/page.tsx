@@ -2,7 +2,8 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { geocodeLocation, getDailyWeather, type DailyWeather } from "@/lib/weather";
 import type { Item, Profile } from "@/lib/types";
 import Link from "next/link";
-import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS } from "@/lib/itemPresentation";
+import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS, TYPE_LABELS } from "@/lib/itemPresentation";
+import { decrypt } from "@/lib/crypto";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { GmailInbox } from "@/components/GmailInbox";
 import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
@@ -390,6 +391,8 @@ export default async function HomePage() {
               const end = item.end_time ? new Date(item.end_time) : null;
               const isNow = start <= now && (!end || end >= now);
               const isPast = end ? end < now : start < now;
+              const plainLocation = decrypt(item.location);
+              const subtitle = plainLocation || item.categories?.[0] || TYPE_LABELS[item.type];
 
               return (
                 <Link
@@ -403,11 +406,11 @@ export default async function HomePage() {
                 >
                   <div className="shrink-0 text-right w-14">
                     <p className="text-xs font-medium leading-none">
-                      {start.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                      {start.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: tz })}
                     </p>
                     {end && (
                       <p className="text-[10px] text-muted mt-0.5">
-                        {end.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                        {end.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: tz })}
                       </p>
                     )}
                   </div>
@@ -416,8 +419,8 @@ export default async function HomePage() {
 
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{item.title}</p>
-                    {item.location && (
-                      <p className="text-xs text-muted truncate">{item.location}</p>
+                    {subtitle && (
+                      <p className="text-xs text-muted truncate">{subtitle}</p>
                     )}
                   </div>
 

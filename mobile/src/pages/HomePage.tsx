@@ -3,14 +3,14 @@ import type { Session } from "@supabase/supabase-js";
 import type { Page } from "@/App";
 import type { Item } from "@/lib/types";
 import { occurrenceForDate } from "@/lib/recurrence";
-import { TYPE_BADGE_COLORS, TYPE_DOT_COLORS, formatTimeRange } from "@/lib/itemPresentation";
+import { TYPE_BADGE_COLORS, TYPE_DOT_COLORS, TYPE_LABELS, formatTimeRange } from "@/lib/itemPresentation";
 import { geocodeLocation, getDailyWeather, type DailyWeather } from "@/lib/weather";
 import { supabase } from "@/lib/supabase";
+import { decryptClient } from "@/lib/crypto";
 import { AppHeader } from "@/components/AppHeader";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { EditGoalPage } from "@/pages/EditGoalPage";
 import { RecentEmails } from "@/components/RecentEmails";
-import { DecryptedText } from "@/components/DecryptedText";
 import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
 import type { PreferredTransport } from "@/lib/types";
 import {
@@ -46,6 +46,22 @@ function WeatherIcon({ desc, size = 32 }: { desc: string; size?: number }) {
   if (desc.includes("nublado")) return <IconCloud {...props} />;
   if (desc.includes("parcialmente")) return <IconSunHigh {...props} />;
   return <IconSun {...props} />;
+}
+
+// Dirección del item (desencriptada) si la tiene; si no, su categoría o tipo.
+function LocationOrCategory({ item }: { item: Item }) {
+  const [plainLocation, setPlainLocation] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    decryptClient(item.location ?? null).then((v) => { if (!cancelled) setPlainLocation(v); });
+    return () => { cancelled = true; };
+  }, [item.location]);
+
+  const fallback = item.categories?.[0] ?? TYPE_LABELS[item.type];
+  const text = plainLocation || fallback;
+  if (!text) return null;
+  return <p className="text-xs text-muted mt-0.5 line-clamp-1">{text}</p>;
 }
 
 function greeting(): string {
@@ -295,9 +311,7 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TYPE_DOT_COLORS[item.type]}`} />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm leading-snug">{item.title}</p>
-                      {item.description && (
-                        <DecryptedText value={item.description} className="text-xs text-muted mt-0.5 line-clamp-2" />
-                      )}
+                      <LocationOrCategory item={item} />
                       {timeLabel !== "Sin fecha" && (
                         <p className="text-xs text-muted mt-0.5">{timeLabel}</p>
                       )}
