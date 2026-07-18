@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PRIORITY_OPTIONS, TYPE_BADGE_COLORS, TYPE_LABELS } from "@/lib/itemPresentation";
 import { decrypt } from "@/lib/crypto";
 import { todayString, todayISOWeekday, isTodayItem, occurrenceToday } from "@/lib/todayItems";
+import { computeAutoTaskStatus } from "@/lib/taskStatus";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { GmailInbox } from "@/components/GmailInbox";
 import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
@@ -131,6 +132,27 @@ export default async function HomePage() {
     .order("start_time", { ascending: true, nullsFirst: false });
 
   const items = (itemsRaw ?? []) as Item[];
+
+  // Actualiza automáticamente el estado (sin_empezar/en_curso/listo) de las
+  // tareas según la hora actual, cada vez que se carga Inicio.
+  const autoStatusNow = new Date();
+  const statusUpdates = items
+    .filter((i) => i.status !== "cancelled")
+    .map((i) => ({ item: i, expected: computeAutoTaskStatus(i, autoStatusNow) }))
+    .filter((u): u is { item: Item; expected: NonNullable<typeof u.expected> } => Boolean(u.expected) && u.expected !== u.item.task_status);
+
+  if (statusUpdates.length > 0) {
+    await Promise.all(
+      statusUpdates.map(({ item, expected }) =>
+        supabase.from("items").update({ task_status: expected }).eq("id", item.id)
+      )
+    );
+    const expectedById = new Map(statusUpdates.map(({ item, expected }) => [item.id, expected]));
+    for (const i of items) {
+      const expected = expectedById.get(i.id);
+      if (expected) i.task_status = expected;
+    }
+  }
 
   // Today's items
   const todayItems = items

@@ -76,6 +76,12 @@ export function EditItemPage({ item, onClose, onSaved, onDeleted }: Props) {
     e.preventDefault();
     if (!title.trim()) return;
     setError(null);
+
+    if (!showWorkSchedule && new Date(endTime) <= new Date(startTime)) {
+      setError("La hora de fin debe ser posterior a la de inicio");
+      return;
+    }
+
     setLoading(true);
 
     try {

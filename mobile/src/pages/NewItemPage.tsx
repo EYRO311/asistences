@@ -128,6 +128,12 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
     e.preventDefault();
     if (!title.trim()) return;
     setError(null);
+
+    if (mode === "tarea" && formMode === "completa" && endTime && new Date(endTime) <= new Date(startTime)) {
+      setError("La hora de fin debe ser posterior a la de inicio");
+      return;
+    }
+
     setLoading(true);
 
     try {
