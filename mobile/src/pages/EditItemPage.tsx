@@ -77,9 +77,15 @@ export function EditItemPage({ item, onClose, onSaved, onDeleted }: Props) {
     if (!title.trim()) return;
     setError(null);
 
-    if (!showWorkSchedule && new Date(endTime) <= new Date(startTime)) {
-      setError("La hora de fin debe ser posterior a la de inicio");
-      return;
+    if (!showWorkSchedule) {
+      if (new Date(endTime) <= new Date(startTime)) {
+        setError("La hora de fin debe ser posterior a la de inicio");
+        return;
+      }
+      if (startTime.slice(0, 10) !== endTime.slice(0, 10)) {
+        setError("La fecha de fin debe ser el mismo día que la de inicio");
+        return;
+      }
     }
 
     setLoading(true);
