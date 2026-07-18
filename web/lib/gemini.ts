@@ -196,7 +196,7 @@ export async function getRecommendations(context: RecommendationContext): Promis
 }
 
 export interface DailyRecommendationContext {
-  items: { title: string; categories: string[] }[];
+  items: { title: string; categories: string[]; description?: string | null }[];
   locationName?: string | null;
   weather?: WeatherSummary | null;
   preferredTransport?: "car" | "bike" | "public_transport" | "walking" | null;
@@ -211,10 +211,10 @@ export interface DailyRecommendationContext {
 
 /**
  * Recomendación única para todo el día (botón "Recomendación automática" en
- * Inicio), en vez de una por tarea. El prompt es deliberadamente corto —
- * solo títulos y categorías de las tareas de hoy, no descripciones completas —
- * para gastar menos tokens, y usa las respuestas puntuales del usuario
- * (transporte, outfit ya pensado) en vez de pedirle a Gemini que las adivine.
+ * Inicio), en vez de una por tarea. El prompt usa título, categorías y
+ * descripción (ya desencriptada por el caller) de cada tarea de hoy, y las
+ * respuestas puntuales del usuario (transporte, outfit ya pensado) en vez de
+ * pedirle a Gemini que las adivine, para gastar menos tokens.
  */
 export async function getDailyRecommendation(context: DailyRecommendationContext): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -229,7 +229,10 @@ export async function getDailyRecommendation(context: DailyRecommendationContext
     userProfileLine(context.userProfile),
     "Tareas de hoy:",
     ...context.items.map(
-      (i) => `- ${i.title}${i.categories.length ? ` (${i.categories.join(", ")})` : ""}`
+      (i) =>
+        `- ${i.title}${i.categories.length ? ` (${i.categories.join(", ")})` : ""}${
+          i.description ? `: ${i.description}` : ""
+        }`
     ),
     context.locationName ? `Ubicación: ${context.locationName}` : null,
     context.weather

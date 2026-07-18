@@ -3,7 +3,9 @@ import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getDailyRecommendation } from "@/lib/gemini";
 import { geocodeLocation, getDailyWeather } from "@/lib/weather";
-import { toLocalDateStr, wallToUTC } from "@/lib/freeSlots";
+import { toLocalDateStr } from "@/lib/freeSlots";
+import { getTodayItems } from "@/lib/todayItems";
+import { decrypt } from "@/lib/crypto";
 import type { Item, Profile } from "@/lib/types";
 
 const VALID_TRANSPORTS = ["car", "bike", "public_transport", "walking"] as const;
@@ -77,18 +79,18 @@ export async function POST(request: NextRequest) {
 
   const timezone = profile?.timezone ?? "America/Mexico_City";
   const todayStr = toLocalDateStr(new Date(), timezone);
-  const dayStart = wallToUTC(todayStr, "00:00", timezone);
-  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-  const { data: itemsRaw } = await service
+  // Trae todos los items activos y filtra "hoy" en la app (no en SQL): las
+  // rutinas recurrentes guardan su start_time fijo en la última ocurrencia
+  // calculada, así que un simple rango de fechas nunca las encuentra — hay
+  // que usar la misma lógica que ya usa Inicio para resolverlas.
+  const { data: allItemsRaw } = await service
     .from("items")
-    .select("title, categories, start_time")
+    .select("title, description, categories, start_time, end_time, all_day, recurrence_days, recurrence_start_time, recurrence_end_time")
     .eq("user_id", userId)
-    .neq("status", "cancelled")
-    .gte("start_time", dayStart.toISOString())
-    .lt("start_time", dayEnd.toISOString());
+    .neq("status", "cancelled");
 
-  const todayItems = (itemsRaw ?? []) as Pick<Item, "title" | "categories" | "start_time">[];
+  const todayItems = getTodayItems((allItemsRaw ?? []) as Item[], timezone);
 
   if (todayItems.length === 0) {
     return NextResponse.json({ error: "No tienes tareas hoy" }, { status: 422 });
@@ -105,7 +107,11 @@ export async function POST(request: NextRequest) {
     : { location: null, weather: null };
 
   const fullText = await getDailyRecommendation({
-    items: todayItems.map((i) => ({ title: i.title, categories: i.categories ?? [] })),
+    items: todayItems.map((i) => ({
+      title: i.title,
+      categories: i.categories ?? [],
+      description: decrypt(i.description),
+    })),
     locationName: resolvedLocation,
     weather,
     preferredTransport: effectiveTransport,
@@ -118,7 +124,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No se pudo generar la recomendación" }, { status: 502 });
   }
 
-  await service.from("daily_recommendations").upsert(
+  const { error: upsertError } = await service.from("daily_recommendations").upsert(
     {
       user_id: userId,
       date: todayStr,
@@ -127,6 +133,9 @@ export async function POST(request: NextRequest) {
     },
     { onConflict: "user_id,date" }
   );
+  if (upsertError) {
+    console.error("daily_recommendations upsert failed:", upsertError.message);
+  }
 
   return NextResponse.json({ recommendation: fullText, generatedAt: new Date().toISOString() });
 }
