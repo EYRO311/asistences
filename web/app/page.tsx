@@ -49,10 +49,27 @@ function fmtMinutes(min: number) {
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 }
 
+// Minutos desde medianoche de `date` EN LA ZONA `tz` — no en la del servidor.
+// Esta página es un Server Component (corre en Vercel, normalmente UTC), así
+// que .getHours()/.getMinutes() darían la hora del servidor, no la del usuario.
+function minutesInTZ(date: Date, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
+}
+
 function computeTodayFreeSlots(
   timedItems: Item[],
   wakeTime: string,
   sleepTime: string,
+  tz: string,
 ): { from: string; to: string }[] {
   const [wh, wm] = wakeTime.split(":").map(Number);
   const [sh, sm] = sleepTime.split(":").map(Number);
@@ -63,7 +80,7 @@ function computeTodayFreeSlots(
     .map((i) => {
       const s = new Date(i.start_time!);
       const e = i.end_time ? new Date(i.end_time) : new Date(s.getTime() + 60 * 60 * 1000);
-      return { from: s.getHours() * 60 + s.getMinutes(), to: e.getHours() * 60 + e.getMinutes() };
+      return { from: minutesInTZ(s, tz), to: minutesInTZ(e, tz) };
     })
     .sort((a, b) => a.from - b.from);
 
@@ -171,6 +188,7 @@ export default async function HomePage() {
     timedItems,
     profile.wake_time ?? "06:00",
     profile.sleep_time ?? "23:00",
+    tz,
   );
 
   // Pending tasks: not done, no specific time today
