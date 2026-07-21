@@ -176,7 +176,7 @@ export default async function HomePage() {
   // Today's items
   const todayItems = items
     .filter((i) => isTodayItem(i, today, weekday, tz))
-    .map((i) => occurrenceToday(i, today))
+    .map((i) => occurrenceToday(i, today, tz))
     .sort((a, b) => {
       if (!a.start_time) return 1;
       if (!b.start_time) return -1;

@@ -1,4 +1,5 @@
 import type { Item } from "@/lib/types";
+import { wallToUTC } from "@/lib/freeSlots";
 
 // Helpers timezone-aware para determinar qué items "ocurren hoy" para un
 // usuario — incluye tanto items con start_time normal como rutinas
@@ -34,13 +35,13 @@ export function isTodayItem(item: Item, todayStr: string, weekday: number, tz: s
   return false;
 }
 
-export function occurrenceToday(item: Item, todayStr: string): Item {
+export function occurrenceToday(item: Item, todayStr: string, tz: string): Item {
   if (!item.recurrence_days?.length) return item;
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const [sh, sm] = item.recurrence_start_time!.split(":").map(Number);
-  const [eh, em] = item.recurrence_end_time!.split(":").map(Number);
-  const start = new Date(y, m - 1, d, sh, sm);
-  const end = new Date(y, m - 1, d, eh, em);
+  // wallToUTC (no new Date(y, m, d, h, m)) porque esto puede correr en un
+  // Server Component en Vercel (UTC) — new Date(...) local hubiera tratado
+  // "09:00" como 9am UTC en vez de 9am en la zona `tz` del usuario.
+  const start = wallToUTC(todayStr, item.recurrence_start_time!, tz);
+  const end = wallToUTC(todayStr, item.recurrence_end_time!, tz);
   return { ...item, start_time: start.toISOString(), end_time: end.toISOString() };
 }
 
@@ -59,5 +60,5 @@ export function getTodayItems(items: Item[], tz: string): Item[] {
   const weekday = todayISOWeekday(todayStr);
   return items
     .filter((i) => isTodayItem(i, todayStr, weekday, tz))
-    .map((i) => occurrenceToday(i, todayStr));
+    .map((i) => occurrenceToday(i, todayStr, tz));
 }
