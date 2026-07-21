@@ -95,7 +95,7 @@ export interface NotionPageResult {
   url: string;
 }
 
-type TaskItemFields = Pick<
+export type TaskItemFields = Pick<
   Item,
   | "title"
   | "description"
