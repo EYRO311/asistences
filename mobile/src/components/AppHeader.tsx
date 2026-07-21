@@ -1,4 +1,4 @@
-import { IconSettings, IconCloudUpload } from "@tabler/icons-react";
+import { IconSettings, IconCloudUpload, IconChartBar } from "@tabler/icons-react";
 
 interface Props {
   title: string;
@@ -6,9 +6,10 @@ interface Props {
   onSync?: () => void;
   syncing?: boolean;
   pendingCount?: number;
+  onReports?: () => void;
 }
 
-export function AppHeader({ title, onSettings, onSync, syncing = false, pendingCount = 0 }: Props) {
+export function AppHeader({ title, onSettings, onSync, syncing = false, pendingCount = 0, onReports }: Props) {
   return (
     <div className="flex items-center justify-between px-4 pb-2 pt-4">
       <h1 className="font-handwriting text-3xl flex-1">{title}</h1>
@@ -35,6 +36,16 @@ export function AppHeader({ title, onSettings, onSync, syncing = false, pendingC
               </span>
             )}
           </div>
+        )}
+        {onReports && (
+          <button
+            type="button"
+            onClick={onReports}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-foreground hover:bg-surface transition-colors"
+            aria-label="Resumen semanal"
+          >
+            <IconChartBar size={18} stroke={1.5} aria-hidden />
+          </button>
         )}
         <button
           type="button"

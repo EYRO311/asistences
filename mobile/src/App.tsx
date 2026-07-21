@@ -16,13 +16,14 @@ import { WeekPage } from "@/pages/WeekPage";
 import { MonthPage } from "@/pages/MonthPage";
 import { TasksPage } from "@/pages/TasksPage";
 import { GoalsPage } from "@/pages/GoalsPage";
+import { ReportsPage } from "@/pages/ReportsPage";
 import { NewItemPage } from "@/pages/NewItemPage";
 import { EditItemPage } from "@/pages/EditItemPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { BottomNav } from "@/components/BottomNav";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 
-export type Page = "home" | "week" | "month" | "tasks" | "goals" | "new";
+export type Page = "home" | "week" | "month" | "tasks" | "goals" | "reports" | "new";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -215,6 +216,9 @@ export default function App() {
             onSettings={sharedProps.onSettings}
             onNewGoal={() => { setNewItemMode("meta"); setLockNewItemMode(true); setShowNew(true); }}
           />
+        )}
+        {currentPage === "reports" && (
+          <ReportsPage items={items} session={session} onSettings={sharedProps.onSettings} />
         )}
       </main>
 

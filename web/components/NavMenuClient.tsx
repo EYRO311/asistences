@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/mes", label: "Mes" },
   { href: "/tareas", label: "Tareas" },
   { href: "/metas", label: "Metas" },
+  { href: "/reportes", label: "Reportes" },
   { href: "/new", label: "Nueva tarea" },
   { href: "/settings", label: "Ajustes" },
 ];

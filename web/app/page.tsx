@@ -18,6 +18,7 @@ import {
   IconSnowflake,
   IconMist,
   IconShirt,
+  IconChartBar,
 } from "@tabler/icons-react";
 
 // ── Weather helpers ─────────────────────────────────────────────────────────
@@ -246,6 +247,13 @@ export default async function HomePage() {
         <h1 className="font-handwriting text-3xl mt-0.5">
           {greeting(tz)}{firstName ? `, ${firstName}` : ""}
         </h1>
+        <Link
+          href="/reportes"
+          className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground"
+        >
+          <IconChartBar size={16} stroke={1.5} aria-hidden />
+          Ver resumen semanal
+        </Link>
       </div>
 
       {/* ── Metas (izquierda) | Recomendación de vestimenta + clima (derecha) ── */}

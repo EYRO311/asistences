@@ -198,7 +198,14 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
 
   return (
     <div className="px-4 pb-4">
-      <AppHeader title="Hoy" onSettings={onSettings} onSync={onSync} syncing={syncing} pendingCount={pendingCount} />
+      <AppHeader
+        title="Hoy"
+        onSettings={onSettings}
+        onSync={onSync}
+        syncing={syncing}
+        pendingCount={pendingCount}
+        onReports={() => onNavigate("reports")}
+      />
 
       {/* Arriba: día + bienvenida */}
       <p className="text-xs text-muted capitalize px-0.5">{dayLabel}</p>
