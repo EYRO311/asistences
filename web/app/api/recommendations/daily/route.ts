@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { getDailyRecommendation, type DailyLeg } from "@/lib/gemini";
 import { geocodeLocation, getDailyWeather, type GeocodedLocation } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
@@ -84,21 +85,9 @@ async function buildDailyLegs(
 const VALID_TRANSPORTS = ["car", "bike", "public_transport", "walking"] as const;
 type ValidTransport = (typeof VALID_TRANSPORTS)[number];
 
-async function authenticate(request: NextRequest): Promise<string | null> {
-  const service = createServiceRoleClient();
-  const authHeader = request.headers.get("Authorization");
-  if (authHeader?.startsWith("Bearer ")) {
-    const { data } = await service.auth.getUser(authHeader.slice(7));
-    return data.user?.id ?? null;
-  }
-  const cookieSupabase = await createClient();
-  const { data: { user } } = await cookieSupabase.auth.getUser();
-  return user?.id ?? null;
-}
-
 // GET: recomendación del día ya generada (si existe), sin disparar preguntas.
 export async function GET(request: NextRequest) {
-  const userId = await authenticate(request);
+  const userId = await requireUser(request);
   if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const service = createServiceRoleClient();
@@ -133,7 +122,7 @@ const postSchema = z.object({
 // sola recomendación para todas las tareas del día a partir de preguntas
 // puntuales (no se le pide a Gemini que las adivine, para gastar menos tokens).
 export async function POST(request: NextRequest) {
-  const userId = await authenticate(request);
+  const userId = await requireUser(request);
   if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));

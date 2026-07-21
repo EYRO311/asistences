@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { encrypt, decrypt } from "@/lib/crypto";
 import type { Goal } from "@/lib/types";
 
@@ -38,9 +39,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const body = await request.json();
   const parsed = createGoalSchema.safeParse(body);
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await service
     .from("goals")
     .insert({
-      user_id: user.id,
+      user_id: userId,
       title: parsed.data.title,
       description: encrypt(parsed.data.description ?? null),
       due_date: parsed.data.due_date ?? null,

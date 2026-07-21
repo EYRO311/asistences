@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { encrypt, decrypt } from "@/lib/crypto";
 import type { Goal } from "@/lib/types";
 
@@ -21,9 +22,8 @@ const updateGoalSchema = z.object({
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const body = await request.json();
   const parsed = updateGoalSchema.safeParse(body);
@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     .from("goals")
     .update(patchData)
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .select("*")
     .single<Goal>();
 
@@ -49,18 +49,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   return NextResponse.json({ goal: { ...data, description: decrypt(data.description) } });
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const service = createServiceRoleClient();
   const { error } = await service
     .from("goals")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

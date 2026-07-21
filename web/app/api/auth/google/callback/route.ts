@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getGoogleOAuthClient } from "@/lib/google";
+import { verifyOAuthState } from "@/lib/oauthState";
 
 /**
  * Callback de OAuth de Google: intercambia el code por tokens y los guarda
  * en `integrations` para el usuario indicado en `state`.
+ *
+ * `state` viene firmado (ver signOAuthState en /connect) — sin esto,
+ * cualquiera podía completar su propio consentimiento y mandar
+ * `state=<user_id de otra persona>` para vincular su cuenta de Google al
+ * perfil de esa víctima.
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -12,9 +18,9 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
 
   const rawState = searchParams.get("state") ?? "";
-  const stateParts = rawState.split(":");
-  const isMobile = stateParts[stateParts.length - 1] === "mobile";
-  const resolvedUserId = isMobile ? stateParts.slice(0, -1).join(":") : rawState;
+  const verifiedState = verifyOAuthState(rawState);
+  const isMobile = verifiedState?.isMobile ?? false;
+  const resolvedUserId = verifiedState?.userId;
 
   function mobileDeepLink(result: "success" | "error") {
     return `com.eyro.agenda://auth/google/${result}`;

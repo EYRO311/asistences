@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { fetchBusyIntervals, getValidGoogleAccessToken } from "@/lib/google";
 import { computeFreeSlots, wallToUTC, toLocalDateStr } from "@/lib/freeSlots";
 import type { Item, Profile } from "@/lib/types";
@@ -21,20 +22,7 @@ function buildWorkingHours(
 export async function GET(request: NextRequest) {
   const service = createServiceRoleClient();
 
-  // Auth: cookie session (web) OR Bearer token (mobile)
-  let userId: string | undefined;
-  const authHeader = request.headers.get("Authorization");
-  if (authHeader?.startsWith("Bearer ")) {
-    const { data } = await service.auth.getUser(authHeader.slice(7));
-    userId = data.user?.id;
-  } else {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id;
-  }
-
+  const userId = await requireUser(request);
   if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }

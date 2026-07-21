@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NOTION_AUTH_URL } from "@/lib/notion";
+import { signOAuthState } from "@/lib/oauthState";
 
 /**
  * Inicia el flujo OAuth de Notion: redirige al usuario a la pantalla de
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  const state = mobileToken ? `${userId}:mobile` : userId;
+  const state = signOAuthState(userId, Boolean(mobileToken));
 
   const url = new URL(NOTION_AUTH_URL);
   url.searchParams.set("client_id", process.env.NOTION_CLIENT_ID!);

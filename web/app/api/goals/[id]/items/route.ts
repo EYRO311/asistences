@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { encrypt, decrypt } from "@/lib/crypto";
 import type { GoalItem } from "@/lib/types";
 
@@ -31,13 +32,12 @@ async function verifyGoalOwner(goalId: string, userId: string): Promise<boolean>
 }
 
 // GET /api/goals/[id]/items — lista checklist items de una meta
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: goalId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  if (!await verifyGoalOwner(goalId, user.id)) {
+  if (!await verifyGoalOwner(goalId, userId)) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
@@ -56,11 +56,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 // POST /api/goals/[id]/items — agrega un item al checklist
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: goalId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  if (!await verifyGoalOwner(goalId, user.id)) {
+  if (!await verifyGoalOwner(goalId, userId)) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
@@ -87,11 +86,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 // PATCH /api/goals/[id]/items — actualiza un item (completar, renombrar, reordenar)
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id: goalId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  if (!await verifyGoalOwner(goalId, user.id)) {
+  if (!await verifyGoalOwner(goalId, userId)) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
@@ -125,11 +123,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/goals/[id]/items?item_id=xxx
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: goalId } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  if (!await verifyGoalOwner(goalId, user.id)) {
+  if (!await verifyGoalOwner(goalId, userId)) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 

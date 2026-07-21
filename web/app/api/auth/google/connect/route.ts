@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getGoogleOAuthClient, GOOGLE_SCOPES } from "@/lib/google";
+import { signOAuthState } from "@/lib/oauthState";
 
 /**
  * Inicia el flujo OAuth de Google: redirige al usuario a la pantalla de
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   const oauth2Client = getGoogleOAuthClient();
 
-  const state = mobileToken ? `${userId}:mobile` : userId;
+  const state = signOAuthState(userId, Boolean(mobileToken));
 
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
