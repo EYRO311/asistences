@@ -5,7 +5,8 @@ import { requireUser } from "@/lib/auth";
 import { deleteItem, SagaError } from "@/lib/saga/createItem";
 import { fixMidnightISO, fixMidnightTime } from "@/lib/normalizeTime";
 import { getValidGoogleAccessToken, updateCalendarEvent } from "@/lib/google";
-import { getNotionAccessToken, updateItemNotionPage } from "@/lib/notion";
+import { getNotionAccessToken } from "@/lib/notion";
+import { updateNotionPageForItem } from "@/lib/notionSync";
 import { suggestOutfitForNotion } from "@/lib/gemini";
 import { resolveLocationAndWeather } from "@/lib/weather";
 import { decrypt } from "@/lib/crypto";
@@ -181,11 +182,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
 
         const notionToken = await getNotionAccessToken(userId);
-        await updateItemNotionPage(
+        // updateNotionPageForItem desencripta description/location
+        // internamente — se pasa el item tal cual, sin resolverlo a mano.
+        await updateNotionPageForItem(
           notionToken,
           updated.notion_page_id,
           profile.notion_database_id,
-          { ...updated, description: plainDescription, location: plainLocation },
+          updated,
           { outfitSuggestion: notionOutfitSuggestion }
         );
       }

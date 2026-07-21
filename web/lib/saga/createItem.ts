@@ -4,11 +4,8 @@ import {
   deleteCalendarEvent,
   getValidGoogleAccessToken,
 } from "@/lib/google";
-import {
-  archiveItemNotionPage,
-  createItemNotionPage,
-  getNotionAccessToken,
-} from "@/lib/notion";
+import { archiveItemNotionPage, getNotionAccessToken } from "@/lib/notion";
+import { createNotionPageForItem } from "@/lib/notionSync";
 import { suggestOutfitForNotion, getRecommendations } from "@/lib/gemini";
 import { resolveLocationAndWeather, geocodeLocation, getDailyWeather } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
@@ -158,10 +155,12 @@ export async function createItem(userId: string, input: CreateItemInput): Promis
             ).catch(() => null);
 
         const notionToken = await getNotionAccessToken(userId);
-        const result = await createItemNotionPage(
+        // createNotionPageForItem desencripta description/location
+        // internamente — se pasa el item tal cual, sin resolverlo a mano.
+        const result = await createNotionPageForItem(
           notionToken,
           profile.notion_database_id,
-          { ...item, description: plainDescription, location: plainLocation },
+          item,
           { outfitSuggestion }
         );
         notionPageId = result.pageId;
@@ -393,10 +392,12 @@ export async function syncItemExternal(userId: string, itemId: string): Promise<
       }
 
       const notionToken = await getNotionAccessToken(userId);
-      const result = await createItemNotionPage(
+      // createNotionPageForItem desencripta description/location
+      // internamente — se pasa el item tal cual, sin resolverlo a mano.
+      const result = await createNotionPageForItem(
         notionToken,
         profile.notion_database_id,
-        { ...item, description: plainDescription, location: plainLocation },
+        item,
         { outfitSuggestion }
       );
       notionPageId = result.pageId;

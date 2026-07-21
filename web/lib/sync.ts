@@ -7,10 +7,10 @@ import {
 } from "@/lib/google";
 import {
   archiveItemNotionPage,
-  createItemNotionPage,
   getNotionAccessToken,
   listNotionPagesWithEventDate,
 } from "@/lib/notion";
+import { createNotionPageForItem } from "@/lib/notionSync";
 import type { Item, Profile } from "@/lib/types";
 
 const SYNC_WINDOW_PAST_DAYS = 30;
@@ -228,7 +228,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
       try {
         if (profile?.notion_database_id) {
           const notionToken = await getNotionAccessToken(userId);
-          const { pageId, url } = await createItemNotionPage(notionToken, profile.notion_database_id, item);
+          const { pageId, url } = await createNotionPageForItem(notionToken, profile.notion_database_id, item);
           await supabase
             .from("items")
             .update({ notion_page_id: pageId, notion_url: url, status: "confirmed" })
@@ -392,7 +392,7 @@ export async function runFullSync(userId: string): Promise<SyncResult> {
       try {
         if (profile?.notion_database_id) {
           const notionToken = await getNotionAccessToken(userId);
-          const { pageId, url } = await createItemNotionPage(notionToken, profile.notion_database_id, item);
+          const { pageId, url } = await createNotionPageForItem(notionToken, profile.notion_database_id, item);
           await supabase
             .from("items")
             .update({ notion_page_id: pageId, notion_url: url, status: "confirmed" })
