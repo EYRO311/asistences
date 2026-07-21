@@ -12,7 +12,8 @@
     "verify:route-auth": "node scripts/verify-route-auth.mjs",
     "verify:notion-decrypt": "node scripts/verify-notion-decrypt.mjs",
     "verify:voice-extraction": "node --env-file=.env.local scripts/verify-voice-extraction.mjs",
-    "verify:reminders": "node scripts/verify-reminders.mjs"
+    "verify:reminders": "node scripts/verify-reminders.mjs",
+    "verify:productivity-report": "node scripts/verify-productivity-report.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
