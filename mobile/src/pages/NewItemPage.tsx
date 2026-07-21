@@ -11,6 +11,7 @@ import {
 import { nextOccurrence } from "@/lib/recurrence";
 import { createLocalItem, updateLocalItem } from "@/db/items";
 import { supabase } from "@/lib/supabase";
+import { syncItemExternal } from "@/lib/sync";
 import { encryptClient } from "@/lib/crypto";
 import { Network } from "@capacitor/network";
 import { IconX } from "@tabler/icons-react";
@@ -19,29 +20,6 @@ import { IconX } from "@tabler/icons-react";
 const GOAL_CATEGORY_OPTIONS = CATEGORY_OPTIONS.filter((c) => c !== "Evento");
 
 type FormMode = "rapida" | "completa";
-
-const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
-
-// Genera la recomendación (clima + IA) para un item recién creado, igual que
-// hace el saga de web al confirmar el item. Fire-and-forget: si falla no
-// afecta la creación, y el modal de detalle la generará después si hace falta.
-async function generateRecommendation(itemId: string) {
-  try {
-    const { data: sess } = await supabase.auth.getSession();
-    const token = sess.session?.access_token;
-    if (!token) return;
-
-    const res = await fetch(`${WEB_URL}/api/items/${itemId}/recommendations`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return;
-
-    const rec = await res.json();
-    await updateLocalItem(itemId, { cached_recommendation: rec });
-  } catch {
-    // recomendaciones son opcionales, no bloqueamos la creación
-  }
-}
 
 type CreationMode = "tarea" | "meta" | "rutina";
 
@@ -204,11 +182,12 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
 
         const networkStatus = await Network.getStatus();
         if (networkStatus.connected) {
-          const { error: upsertError } = await supabase.from("items").upsert({ ...newItem });
+          const { error: upsertError } = await supabase.from("items").upsert({ ...newItem, status: "syncing" });
           if (!upsertError) {
-            await supabase.from("items").update({ status: "confirmed" }).eq("id", newItem.id);
-            await updateLocalItem(newItem.id, { status: "confirmed" });
-            generateRecommendation(newItem.id);
+            await updateLocalItem(newItem.id, { status: "syncing" });
+            // Google Calendar/Notion + recomendación: mismo resultado final
+            // que si se hubiera creado en web, no solo "confirmed" a ciegas.
+            syncItemExternal(newItem.id);
           }
         }
 
@@ -251,14 +230,15 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
       // Always save locally first (status = draft)
       const newItem = await createLocalItem(itemData);
 
-      // If online, push to Supabase and mark as confirmed
+      // If online, push to Supabase; el estado final (confirmed/failed) lo
+      // decide syncItemExternal según si Google Calendar/Notion sí se
+      // pudieron crear — no se asume "confirmed" solo por haber llegado.
       const networkStatus = await Network.getStatus();
       if (networkStatus.connected) {
-        const { error: upsertError } = await supabase.from("items").upsert({ ...newItem });
+        const { error: upsertError } = await supabase.from("items").upsert({ ...newItem, status: "syncing" });
         if (!upsertError) {
-          await supabase.from("items").update({ status: "confirmed" }).eq("id", newItem.id);
-          await updateLocalItem(newItem.id, { status: "confirmed" });
-          generateRecommendation(newItem.id);
+          await updateLocalItem(newItem.id, { status: "syncing" });
+          syncItemExternal(newItem.id);
         }
       }
 
