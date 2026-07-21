@@ -10,7 +10,8 @@
     "verify:crypto": "node scripts/verify-crypto-compat.mjs",
     "verify:oauth-state": "node scripts/verify-oauth-state.mjs",
     "verify:route-auth": "node scripts/verify-route-auth.mjs",
-    "verify:notion-decrypt": "node scripts/verify-notion-decrypt.mjs"
+    "verify:notion-decrypt": "node scripts/verify-notion-decrypt.mjs",
+    "verify:voice-extraction": "node --env-file=.env.local scripts/verify-voice-extraction.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

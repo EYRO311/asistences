@@ -13,6 +13,7 @@ import {
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { LocationField } from "@/components/LocationField";
 import { ChipGroup } from "@/components/ChipGroup";
+import { VoiceTaskButton, type VoiceExtraction } from "@/components/VoiceTaskButton";
 import { nextOccurrence } from "@/lib/recurrence";
 import { sileo } from "sileo";
 import { encryptClient } from "@/lib/crypto-client";
@@ -133,6 +134,20 @@ function NewItemForm() {
     setRecurrenceDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
+  }
+
+  // Fase 4: prellena el formulario con lo que Gemini extrajo de la nota de
+  // voz — el usuario sigue revisando y confirmando con el botón normal.
+  function handleVoiceExtracted(extraction: VoiceExtraction) {
+    setTitle(extraction.title);
+    if (extraction.category) setCategories([extraction.category]);
+    if (extraction.date) {
+      const time = extraction.time ?? "09:00";
+      setStartTime(`${extraction.date}T${time}`);
+    }
+    if (formMode === "completa") {
+      setAllDay(extraction.allDay);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -314,6 +329,8 @@ function NewItemForm() {
         {/* ════════════ TAREA ════════════ */}
         {mode === "tarea" && (
           <>
+            <VoiceTaskButton onExtracted={handleVoiceExtracted} />
+
             <CategoriesField categories={categories} onToggle={toggleCategory} />
 
             <TitleField value={title} onChange={setTitle} />
