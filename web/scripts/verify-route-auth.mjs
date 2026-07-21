@@ -23,12 +23,17 @@ const ROUTES_ROOT = join(import.meta.dirname, "..", "app", "api");
 //  - auth/*/callback: no hay sesión que verificar (puede ser un browser
 //    externo sin cookies, en el caso de mobile) — la seguridad viene de que
 //    `state` está firmado (ver web/lib/oauthState.ts), no de una sesión viva.
+//  - push/send-due: la llama un cron externo (no un usuario) para revisar A
+//    TODOS los usuarios con recordatorios activos, así que no hay un solo
+//    user_id que autenticar — se protege con CRON_SECRET (comparación
+//    timing-safe) en vez de requireUser/getUser.
 const EXEMPT = new Set([
   "auth/signout/route.ts",
   "auth/google/connect/route.ts",
   "auth/google/callback/route.ts",
   "auth/notion/connect/route.ts",
   "auth/notion/callback/route.ts",
+  "push/send-due/route.ts",
 ]);
 
 function findRouteFiles(dir) {

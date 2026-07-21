@@ -167,6 +167,8 @@ export interface Profile {
   theme: "light" | "dark" | null;
   wake_time: string;
   sleep_time: string;
+  reminders_enabled: boolean;
+  reminder_minutes_before: number;
   created_at: string;
 }
 
