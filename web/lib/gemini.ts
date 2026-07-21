@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
-import type { Gender } from "@/lib/types";
+import { z } from "zod";
+import { CATEGORY_OPTIONS } from "@/lib/itemPresentation";
+import type { Category, Gender } from "@/lib/types";
 
 // Primary model from env, then fallback chain in order
 const DEFAULT_MODEL = "gemini-2.5-flash";
@@ -294,4 +296,65 @@ export async function getDailyRecommendation(context: DailyRecommendationContext
     .join("\n");
 
   return generateWithFallback(apiKey, prompt);
+}
+
+// ── Fase 4 del plan de implementación: crear una tarea hablando ─────────────
+
+const voiceExtractionSchema = z.object({
+  title: z.string().min(1),
+  category: z.enum(CATEGORY_OPTIONS as [Category, ...Category[]]).nullable(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullable(),
+  allDay: z.boolean(),
+});
+
+export type VoiceTaskExtraction = z.infer<typeof voiceExtractionSchema>;
+
+/**
+ * Extrae de una transcripción de voz los datos para prellenar el formulario
+ * de "Nueva tarea": título, categoría, fecha y hora. El usuario revisa y
+ * confirma en el formulario normal antes de guardar — esto solo prellena,
+ * no crea la tarea directamente (si Gemini entiende mal algo, el usuario lo
+ * corrige antes de que se guarde nada).
+ *
+ * Responde en JSON estricto para poder parsear con seguridad; si Gemini
+ * agrega texto extra alrededor (a veces pasa pese a la instrucción), se
+ * extrae el primer bloque `{...}` de la respuesta antes de parsear.
+ */
+export async function extractTaskFromSpeech(
+  transcript: string,
+  context: { todayDate: string; nowTime: string; weekday: string }
+): Promise<VoiceTaskExtraction | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = [
+    "Extrae de esta transcripción de voz los datos de una tarea/evento para una agenda personal.",
+    "Responde ÚNICAMENTE con un objeto JSON (sin texto adicional, sin comillas triples, sin explicación), con esta forma exacta:",
+    '{"title": string, "category": string|null, "date": "YYYY-MM-DD"|null, "time": "HH:mm"|null, "allDay": boolean}',
+    `"category" debe ser exactamente una de estas opciones, o null si ninguna aplica claramente: ${CATEGORY_OPTIONS.join(", ")}.`,
+    "Resuelve fechas y horas relativas ('mañana', 'el viernes que viene', 'en dos horas', 'a mediodía') usando la fecha/hora actual dadas abajo.",
+    "Si no se menciona ninguna hora específica, usa allDay=true y time=null. Si no se menciona fecha ni algo relativo a hoy, usa date=null.",
+    `Fecha actual: ${context.todayDate} (${context.weekday}). Hora actual: ${context.nowTime}.`,
+    `Transcripción: "${transcript.replace(/"/g, "'")}"`,
+  ].join("\n");
+
+  const raw = await generateWithFallback(apiKey, prompt);
+  if (!raw) return null;
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return voiceExtractionSchema.parse(parsed);
+  } catch {
+    return null;
+  }
 }
