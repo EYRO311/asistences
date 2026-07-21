@@ -9,6 +9,9 @@ import type { Item, Profile } from "@/lib/types";
 const querySchema = z.object({
   time_min: z.string().datetime(),
   time_max: z.string().datetime(),
+  // Fase 8: al revisar conflictos desde el formulario de editar tarea, el
+  // propio item no debe contar como "ocupado" contra sí mismo.
+  exclude_item_id: z.string().uuid().optional(),
 });
 
 function buildWorkingHours(
@@ -31,6 +34,7 @@ export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse({
     time_min: request.nextUrl.searchParams.get("time_min"),
     time_max: request.nextUrl.searchParams.get("time_max"),
+    exclude_item_id: request.nextUrl.searchParams.get("exclude_item_id") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -64,11 +68,11 @@ export async function GET(request: NextRequest) {
     // problemas con combinaciones de filtros de Supabase.
     const { data: allItemsRaw } = await service
       .from("items")
-      .select("start_time, end_time, recurrence_days, recurrence_start_time, recurrence_end_time, google_event_id, source")
+      .select("id, start_time, end_time, recurrence_days, recurrence_start_time, recurrence_end_time, google_event_id, source")
       .eq("user_id", user.id);
 
-    type RawItem = Pick<Item, "start_time" | "end_time" | "recurrence_days" | "recurrence_start_time" | "recurrence_end_time" | "google_event_id" | "source">;
-    const items = (allItemsRaw ?? []) as RawItem[];
+    type RawItem = Pick<Item, "id" | "start_time" | "end_time" | "recurrence_days" | "recurrence_start_time" | "recurrence_end_time" | "google_event_id" | "source">;
+    const items = ((allItemsRaw ?? []) as RawItem[]).filter((item) => item.id !== parsed.data.exclude_item_id);
 
     const extraBusy: { start: Date; end: Date }[] = [];
 

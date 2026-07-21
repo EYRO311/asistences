@@ -14,6 +14,7 @@ import { DateTimeInput } from "@/components/DateTimeInput";
 import { LocationField } from "@/components/LocationField";
 import { ChipGroup } from "@/components/ChipGroup";
 import { VoiceTaskButton, type VoiceExtraction } from "@/components/VoiceTaskButton";
+import { ConflictWarning } from "@/components/ConflictWarning";
 import { nextOccurrence } from "@/lib/recurrence";
 import { sileo } from "sileo";
 import { encryptClient } from "@/lib/crypto-client";
@@ -358,6 +359,16 @@ function NewItemForm() {
                   <label className="block text-sm font-medium mb-1">Fin (opcional)</label>
                   <DateTimeInput id="end_time" value={endTime} onChange={setEndTime} allDay={allDay} />
                 </div>
+
+                <ConflictWarning
+                  startTime={startTime}
+                  endTime={endTime}
+                  allDay={allDay}
+                  onApply={(s, e) => {
+                    setStartTime(s);
+                    setEndTime(e);
+                  }}
+                />
 
                 <div>
                   <label className="block text-sm font-medium mb-1" htmlFor="location">

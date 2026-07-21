@@ -15,6 +15,7 @@ import { syncItemExternal } from "@/lib/sync";
 import { encryptClient } from "@/lib/crypto";
 import { Network } from "@capacitor/network";
 import { IconX } from "@tabler/icons-react";
+import { ConflictWarning } from "@/components/ConflictWarning";
 
 // Categorías de meta no incluyen "Evento" (solo aplica a tareas)
 const GOAL_CATEGORY_OPTIONS = CATEGORY_OPTIONS.filter((c) => c !== "Evento");
@@ -474,6 +475,16 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
                     className="w-full rounded-xl border border-border-soft bg-surface px-3 py-2.5 text-sm"
                   />
                 </div>
+
+                <ConflictWarning
+                  startTime={startTime}
+                  endTime={endTime}
+                  allDay={allDay}
+                  onApply={(s, e) => {
+                    setStartTime(s);
+                    setEndTime(e);
+                  }}
+                />
               </div>
             ) : (
               <p className="mt-1.5 text-[11px] text-muted">

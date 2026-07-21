@@ -14,6 +14,7 @@ import { nextOccurrence } from "@/lib/recurrence";
 import { updateLocalItem, deleteLocalItem } from "@/db/items";
 import { decryptClient, encryptClient } from "@/lib/crypto";
 import { IconX } from "@tabler/icons-react";
+import { ConflictWarning } from "@/components/ConflictWarning";
 
 function toLocalInputValue(date: Date) {
   const offset = date.getTimezoneOffset();
@@ -299,6 +300,19 @@ export function EditItemPage({ item, onClose, onSaved, onDeleted }: Props) {
                   />
                 </div>
               </div>
+            )}
+
+            {!allDay && (
+              <ConflictWarning
+                startTime={startTime}
+                endTime={endTime}
+                allDay={allDay}
+                excludeItemId={item.id}
+                onApply={(s, e) => {
+                  setStartTime(s);
+                  setEndTime(e);
+                }}
+              />
             )}
           </>
         )}

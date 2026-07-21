@@ -21,6 +21,7 @@ import { DeleteItemButton } from "@/components/DeleteItemButton";
 import { LocationField } from "@/components/LocationField";
 import { WorkSchedulePicker } from "@/components/WorkSchedulePicker";
 import { DateTimeInput } from "@/components/DateTimeInput";
+import { ConflictWarning } from "@/components/ConflictWarning";
 import { nextOccurrence } from "@/lib/recurrence";
 
 function toLocalInputValue(date: Date): string {
@@ -217,6 +218,17 @@ export function EditItemForm({ item }: { item: Item }) {
               <DateTimeInput id="end_time" value={endTime} onChange={setEndTime} allDay={allDay} />
             </div>
           </div>
+
+          <ConflictWarning
+            startTime={startTime}
+            endTime={endTime}
+            allDay={allDay}
+            excludeItemId={item.id}
+            onApply={(s, e) => {
+              setStartTime(s);
+              setEndTime(e);
+            }}
+          />
         </>
       )}
 
