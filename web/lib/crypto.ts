@@ -1,5 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
+// Implementación server-side (Node `crypto`) del mismo contrato que
+// web/lib/crypto-client.ts (fuente de verdad para Web Crypto API, usada por
+// el navegador y por mobile/src/lib/crypto.ts). No comparten código literal
+// porque son APIs distintas, pero deben producir/leer el mismo formato:
+// iv(hex):tag(hex):ciphertext(hex), AES-256-GCM, IV 12 bytes, tag 16 bytes.
+// Verificado por scripts/verify-crypto-compat.mjs.
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;   // 96 bits recomendado para GCM
 const TAG_LENGTH = 16;  // 128 bits auth tag
