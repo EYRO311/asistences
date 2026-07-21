@@ -302,6 +302,152 @@ async function generateAndSaveRecommendation(
   );
 }
 
+/**
+ * Fase 1 del plan de implementación: mobile crea items directo en Supabase
+ * (offline-first, ver mobile/src/lib/sync.ts) sin pasar por createItem() —
+ * antes eso significaba que NUNCA se creaba el evento de Google Calendar ni
+ * la página de Notion para nada creado desde mobile, y el item se marcaba
+ * "confirmed" de todas formas (supuesto implícito, no había ningún aviso).
+ *
+ * Esta función corre los mismos pasos 2-4 del saga (Google Calendar, Notion,
+ * confirmar, recomendación) mobile lea PARA UN ITEM QUE YA EXISTE — a
+ * diferencia de createItem(), si Google/Notion fallan NO se revierte nada
+ * (el usuario ya ve el item en su app; borrarlo sería más confuso que
+ * dejarlo en 'failed' para poder reintentar). Es idempotente: si el item ya
+ * tiene google_event_id/notion_page_id, no los vuelve a crear.
+ */
+export async function syncItemExternal(userId: string, itemId: string): Promise<Item> {
+  const supabase = createServiceRoleClient();
+
+  const { data: item, error: fetchError } = await supabase
+    .from("items")
+    .select("*")
+    .eq("id", itemId)
+    .eq("user_id", userId)
+    .single<Item>();
+
+  if (fetchError || !item) {
+    throw new SagaError("supabase_lookup", "Item no encontrado");
+  }
+
+  const plainDescription = decrypt(item.description);
+  const plainLocation = decrypt(item.location);
+
+  let googleEventId: string | null = item.google_event_id;
+  let notionPageId: string | null = item.notion_page_id;
+  let notionUrl: string | null = item.notion_url;
+  let outfitSuggestion: string | null = item.outfit_suggestion;
+  let hadFailure = false;
+
+  if (item.add_to_calendar && !googleEventId && item.start_time && item.end_time) {
+    try {
+      const { data: calProfile } = await supabase
+        .from("profiles")
+        .select("timezone")
+        .eq("id", userId)
+        .single<Pick<Profile, "timezone">>();
+
+      const accessToken = await getValidGoogleAccessToken(userId);
+      googleEventId = await createCalendarEvent(accessToken, {
+        title: item.title,
+        description: plainDescription ?? undefined,
+        start: item.start_time,
+        end: item.end_time,
+        allDay: item.all_day,
+        timeZone: calProfile?.timezone ?? "America/Mexico_City",
+        recurrenceDays: item.recurrence_days,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.includes("no tiene conectada")) hadFailure = true;
+    }
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("notion_database_id, location, full_name, age, gender, preferred_transport, extra_buffer_minutes, timezone")
+    .eq("id", userId)
+    .single<Pick<Profile, "notion_database_id" | "location" | "full_name" | "age" | "gender" | "preferred_transport" | "extra_buffer_minutes" | "timezone">>();
+
+  const isPastItemDay = item.start_time
+    ? isPastDay(item.start_time, profile?.timezone ?? "America/Mexico_City")
+    : false;
+
+  const originText = profile?.location ?? null;
+  const destinationText = plainLocation ?? originText;
+  const { location: resolvedLocation, weather } = isPastItemDay
+    ? { location: destinationText, weather: null }
+    : await resolveLocationAndWeather(destinationText, item.start_time).catch(() => ({
+        location: destinationText,
+        weather: null,
+      }));
+
+  if (profile?.notion_database_id && !notionPageId) {
+    try {
+      const userProfile = { name: profile.full_name, age: profile.age, gender: profile.gender };
+
+      if (!outfitSuggestion && !isPastItemDay) {
+        outfitSuggestion = await suggestOutfitForNotion(
+          item.title, plainDescription, resolvedLocation, weather, userProfile
+        ).catch(() => null);
+      }
+
+      const notionToken = await getNotionAccessToken(userId);
+      const result = await createItemNotionPage(
+        notionToken,
+        profile.notion_database_id,
+        { ...item, description: plainDescription, location: plainLocation },
+        { outfitSuggestion }
+      );
+      notionPageId = result.pageId;
+      notionUrl = result.url;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.includes("no tiene conectada")) hadFailure = true;
+    }
+  } else if (!profile?.notion_database_id && destinationText && !outfitSuggestion && !isPastItemDay) {
+    outfitSuggestion = await suggestOutfitForNotion(
+      item.title, plainDescription, resolvedLocation, weather,
+      profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null
+    ).catch(() => null);
+  }
+
+  const { data: updatedItem, error: updateError } = await supabase
+    .from("items")
+    .update({
+      google_event_id: googleEventId,
+      notion_page_id: notionPageId,
+      notion_url: notionUrl,
+      outfit_suggestion: outfitSuggestion,
+      status: hadFailure ? "failed" : "confirmed",
+    })
+    .eq("id", itemId)
+    .select("*")
+    .single<Item>();
+
+  if (updateError || !updatedItem) {
+    throw new SagaError("supabase_confirm", updateError?.message ?? "No se pudo confirmar el item");
+  }
+
+  if (!isPastItemDay) {
+    generateAndSaveRecommendation(supabase, updatedItem.id, {
+      title: updatedItem.title,
+      description: plainDescription,
+      originText,
+      destinationText,
+      resolvedLocation,
+      weather,
+      startTime: updatedItem.start_time,
+      outfitBrief: outfitSuggestion,
+      preferredTransport: profile?.preferred_transport ?? null,
+      extraBuffer: profile?.extra_buffer_minutes ?? 0,
+      userProfile: profile ? { name: profile.full_name, age: profile.age, gender: profile.gender } : null,
+    }).catch(() => null);
+  }
+
+  return updatedItem;
+}
+
 async function compensate(userId: string, itemId: string, googleEventId: string | null) {
   const supabase = createServiceRoleClient();
 
