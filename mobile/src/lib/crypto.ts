@@ -1,5 +1,14 @@
 // AES-256-GCM usando la Web Crypto API (disponible en el WebView de Capacitor).
-// Mismo formato que el servidor/web: iv(hex):tag(hex):ciphertext(hex)
+//
+// ESPEJO de web/lib/crypto-client.ts (fuente de verdad, fase 0 del plan de
+// implementación) — debe mantenerse byte-a-byte idéntico a ese archivo. La
+// única diferencia permitida es la línea que lee la key (VITE_ENCRYPTION_KEY
+// aquí vs. NEXT_PUBLIC_ENCRYPTION_KEY en web). Si se cambia el algoritmo/
+// formato en el archivo fuente, aplicar el mismo cambio aquí.
+//
+// Mismo formato que el servidor/web: iv(hex):tag(hex):ciphertext(hex).
+// Compatibilidad entre las tres implementaciones verificada por
+// web/scripts/verify-crypto-compat.mjs.
 // Clave en VITE_ENCRYPTION_KEY (mismo valor que ENCRYPTION_KEY en el servidor)
 
 const ALGO = "AES-GCM";

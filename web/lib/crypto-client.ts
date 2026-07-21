@@ -1,7 +1,21 @@
 "use client";
 
 // AES-256-GCM usando la Web Crypto API del navegador.
-// Mismo formato que el servidor: iv(hex):tag(hex):ciphertext(hex)
+//
+// FUENTE DE VERDAD del cifrado en Web Crypto API (fase 0 del plan de
+// implementación): mobile/src/lib/crypto.ts debe ser un espejo byte-a-byte de
+// este archivo — la única diferencia permitida es la línea que lee la key
+// (NEXT_PUBLIC_ENCRYPTION_KEY aquí vs. VITE_ENCRYPTION_KEY en mobile). Si se
+// cambia el algoritmo/formato aquí, hay que aplicar el mismo cambio allá.
+//
+// El servidor (web/lib/crypto.ts, Node `crypto`) implementa el mismo
+// algoritmo/formato con una API distinta (no se puede compartir el código
+// literal entre Node y Web Crypto), pero debe producir/leer exactamente el
+// mismo formato: iv(hex):tag(hex):ciphertext(hex), AES-256-GCM, IV de 12
+// bytes, tag de 16 bytes. La compatibilidad entre las tres implementaciones
+// se verifica con scripts/verify-crypto-compat.mjs (correr con
+// `node scripts/verify-crypto-compat.mjs` en web/).
+//
 // Clave en NEXT_PUBLIC_ENCRYPTION_KEY (mismo valor que ENCRYPTION_KEY en el servidor)
 
 const ALGO = "AES-GCM";
