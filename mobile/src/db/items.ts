@@ -179,3 +179,28 @@ export async function getUnsyncedItems(): Promise<string[]> {
   const result = await db.query("SELECT id FROM items WHERE synced = 0 AND pending_delete = 0");
   return (result.values ?? []).map((r) => r.id as string);
 }
+
+// ── Fase 5 del plan de implementación: soporte para Realtime ────────────────
+
+/**
+ * true si hay un cambio local todavía sin subir para este item (crear,
+ * editar o borrar). Se usa para ignorar un evento de Realtime que llegue
+ * mientras ese cambio sigue pendiente — el cambio local manda, y su propia
+ * confirmación llegará cuando se suba (evita que un evento viejo del
+ * servidor sobrescriba una edición que el usuario acaba de hacer offline).
+ */
+export async function hasPendingSyncFor(itemId: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.query("SELECT 1 FROM sync_queue WHERE item_id = ? LIMIT 1", [itemId]);
+  return (result.values?.length ?? 0) > 0;
+}
+
+/**
+ * Borra un item local SIN encolar un "delete" de vuelta — para cuando la
+ * eliminación ya ocurrió en el servidor (evento de Realtime) y solo hay que
+ * reflejarla localmente, no volver a sincronizarla.
+ */
+export async function hardDeleteLocalItem(id: string): Promise<void> {
+  const db = await getDb();
+  await db.run("DELETE FROM items WHERE id = ?", [id]);
+}

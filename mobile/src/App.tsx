@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { fullSync, forceSyncAll } from "@/lib/sync";
 import { getAllItems, getPendingCount, updateLocalItem } from "@/db/items";
 import { computeAutoTaskStatus } from "@/lib/taskStatus";
+import { subscribeToItemChanges } from "@/lib/realtime";
 import { Network } from "@capacitor/network";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -116,6 +117,16 @@ export default function App() {
         console.error("Auto task status sync failed:", err);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  // Fase 5 del plan de implementación: refleja en vivo (sin sync manual)
+  // los cambios que se hagan en web u otro dispositivo, mientras no haya un
+  // cambio local todavía pendiente de subir para ese mismo item.
+  useEffect(() => {
+    if (!session?.user) return;
+    const unsubscribe = subscribeToItemChanges(session.user.id, refreshItems);
+    return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 

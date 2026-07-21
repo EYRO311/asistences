@@ -7,6 +7,7 @@ import { TYPE_BADGE_COLORS, TYPE_DOT_COLORS, TYPE_LABELS, formatTimeRange } from
 import { geocodeLocation, getDailyWeather, type DailyWeather } from "@/lib/weather";
 import { supabase } from "@/lib/supabase";
 import { decryptClient } from "@/lib/crypto";
+import { subscribeToGoalChanges } from "@/lib/realtime";
 import { AppHeader } from "@/components/AppHeader";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { EditGoalPage } from "@/pages/EditGoalPage";
@@ -172,6 +173,12 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
   useEffect(() => {
     loadGoals();
   }, [loadGoals]);
+
+  // Fase 5: refleja en vivo cambios de metas hechos en web u otro dispositivo.
+  useEffect(() => {
+    const unsubscribe = subscribeToGoalChanges(session.user.id, loadGoals);
+    return unsubscribe;
+  }, [session.user.id, loadGoals]);
 
   const dayItems = items
     .map((item) => occurrenceForDate(item, today))

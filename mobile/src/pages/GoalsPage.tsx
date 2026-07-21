@@ -5,6 +5,7 @@ import type { GoalRecurrence } from "@/lib/types";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { EditGoalPage } from "@/pages/EditGoalPage";
 import { AppHeader } from "@/components/AppHeader";
+import { subscribeToGoalChanges } from "@/lib/realtime";
 import { IconPlus } from "@tabler/icons-react";
 
 const RECURRENCE_ORDER: GoalRecurrence[] = ["daily", "weekly", "monthly", "none"];
@@ -39,6 +40,12 @@ export function GoalsPage({ session, onSettings, onNewGoal }: Props) {
   useEffect(() => {
     loadGoals();
   }, [loadGoals]);
+
+  // Fase 5: refleja en vivo cambios de metas hechos en web u otro dispositivo.
+  useEffect(() => {
+    const unsubscribe = subscribeToGoalChanges(session.user.id, loadGoals);
+    return unsubscribe;
+  }, [session.user.id, loadGoals]);
 
   const active = (goals ?? []).filter((g) => g.status === "active");
   const completed = (goals ?? []).filter((g) => g.status === "completed");
