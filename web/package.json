@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify:crypto": "node scripts/verify-crypto-compat.mjs"
+    "verify:crypto": "node scripts/verify-crypto-compat.mjs",
+    "verify:oauth-state": "node scripts/verify-oauth-state.mjs",
+    "verify:route-auth": "node scripts/verify-route-auth.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

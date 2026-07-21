@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { getRecommendations } from "@/lib/gemini";
 import { decrypt } from "@/lib/crypto";
 import type { Goal, GoalRecommendation, GoalRecurrence } from "@/lib/types";
@@ -26,9 +27,8 @@ export async function GET(request: NextRequest) {
   }
   const period = periodParam as Period;
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const userId = await requireUser(request);
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const service = createServiceRoleClient();
 
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   const { data: existing } = await service
     .from("goal_recommendations")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("recurrence_type", period)
     .single<GoalRecommendation>();
 
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
   const { data: goals, error: goalsError } = await service
     .from("goals")
     .select("*, goal_items(*)")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("recurrence_type", period as GoalRecurrence)
     .eq("status", "active");
 
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
   // Guarda o actualiza
   await service.from("goal_recommendations").upsert(
     {
-      user_id: user.id,
+      user_id: userId,
       recurrence_type: period,
       outfit_brief: null,
       full_text: fullText,

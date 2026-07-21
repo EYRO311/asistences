@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { deleteItem, SagaError } from "@/lib/saga/createItem";
 import { fixMidnightISO, fixMidnightTime } from "@/lib/normalizeTime";
 import { getValidGoogleAccessToken, updateCalendarEvent } from "@/lib/google";
@@ -41,13 +42,9 @@ interface RouteParams {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
-  const supabase = await createClient();
+  const userId = await requireUser(request);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
@@ -72,7 +69,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     .from("items")
     .select("*")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .single<Item>();
 
   if (fetchError || !existing) {
@@ -120,7 +117,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { data: profileForOutfit } = await service
       .from("profiles")
       .select("location, full_name, age, gender")
-      .eq("id", user.id)
+      .eq("id", userId)
       .single<Pick<Profile, "location" | "full_name" | "age" | "gender">>();
     const { location: resolvedLoc, weather: outfitWeather } = await resolveLocationAndWeather(
       plainLocation ?? profileForOutfit?.location ?? null,
@@ -143,10 +140,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const { data: profile } = await service
         .from("profiles")
         .select("timezone")
-        .eq("id", user.id)
+        .eq("id", userId)
         .single<Pick<Profile, "timezone">>();
 
-      const accessToken = await getValidGoogleAccessToken(user.id);
+      const accessToken = await getValidGoogleAccessToken(userId);
       await updateCalendarEvent(accessToken, updated.google_event_id, {
         title: updated.title,
         description: plainDescription ?? undefined,
@@ -162,7 +159,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const { data: profile } = await service
         .from("profiles")
         .select("notion_database_id, location")
-        .eq("id", user.id)
+        .eq("id", userId)
         .single<Pick<Profile, "notion_database_id" | "location">>();
 
       if (profile?.notion_database_id) {
@@ -183,7 +180,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             )) ?? outfitSuggestion;
         }
 
-        const notionToken = await getNotionAccessToken(user.id);
+        const notionToken = await getNotionAccessToken(userId);
         await updateItemNotionPage(
           notionToken,
           updated.notion_page_id,
@@ -206,20 +203,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   });
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
-  const supabase = await createClient();
+  const userId = await requireUser(request);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
   try {
-    await deleteItem(user.id, id);
+    await deleteItem(userId, id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof SagaError) {

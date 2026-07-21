@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { getRecommendations } from "@/lib/gemini";
 import { geocodeLocation, getDailyWeather } from "@/lib/weather";
 import { estimateTravel } from "@/lib/travel";
@@ -14,18 +15,6 @@ interface RouteParams {
 
 const VALID_TRANSPORTS = ["car", "bike", "public_transport", "walking"] as const;
 type ValidTransport = (typeof VALID_TRANSPORTS)[number];
-
-async function authenticate(request: NextRequest): Promise<string | null> {
-  const service = createServiceRoleClient();
-  const authHeader = request.headers.get("Authorization");
-  if (authHeader?.startsWith("Bearer ")) {
-    const { data } = await service.auth.getUser(authHeader.slice(7));
-    return data.user?.id ?? null;
-  }
-  const cookieSupabase = await createClient();
-  const { data: { user } } = await cookieSupabase.auth.getUser();
-  return user?.id ?? null;
-}
 
 async function buildRecommendation(
   userId: string,
@@ -199,7 +188,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ? (transportParam as ValidTransport)
       : null;
 
-  const userId = await authenticate(request);
+  const userId = await requireUser(request);
   if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
@@ -219,7 +208,7 @@ const postSchema = z.object({
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
 
-  const userId = await authenticate(request);
+  const userId = await requireUser(request);
   if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }

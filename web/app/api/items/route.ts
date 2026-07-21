@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { createItem, SagaError } from "@/lib/saga/createItem";
 import { fixMidnightISO, fixMidnightTime } from "@/lib/normalizeTime";
 
@@ -46,13 +47,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
+  const userId = await requireUser(request);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
@@ -69,7 +66,7 @@ export async function POST(request: NextRequest) {
       end_time: fixMidnightISO(parsed.data.end_time) as string | undefined,
       recurrence_end_time: fixMidnightTime(parsed.data.recurrence_end_time) as string | undefined,
     };
-    const item = await createItem(user.id, data);
+    const item = await createItem(userId, data);
     return NextResponse.json({ item }, { status: 201 });
   } catch (err) {
     if (err instanceof SagaError) {
