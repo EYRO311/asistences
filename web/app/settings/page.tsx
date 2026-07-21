@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { SettingsForm } from "@/components/SettingsForm";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import type { Integration, Profile } from "@/lib/types";
 
 export default async function SettingsPage({
@@ -38,6 +39,13 @@ export default async function SettingsPage({
         </div>
         <ThemeToggle />
       </section>
+
+      {profile && (
+        <NotificationSettings
+          remindersEnabled={profile.reminders_enabled}
+          reminderMinutesBefore={profile.reminder_minutes_before}
+        />
+      )}
 
       {google === "connected" && <p className="mb-4 text-sm text-green-600">Google conectado correctamente.</p>}
       {google === "error" && <p className="mb-4 text-sm text-red-600">Hubo un error conectando Google.</p>}
