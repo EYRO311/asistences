@@ -14,7 +14,8 @@
     "verify:voice-extraction": "node --env-file=.env.local scripts/verify-voice-extraction.mjs",
     "verify:reminders": "node scripts/verify-reminders.mjs",
     "verify:productivity-report": "node scripts/verify-productivity-report.mjs",
-    "verify:conflict-check": "node scripts/verify-conflict-check.mjs"
+    "verify:conflict-check": "node scripts/verify-conflict-check.mjs",
+    "verify:daily-markdown": "node scripts/verify-daily-markdown.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

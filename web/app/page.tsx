@@ -9,6 +9,7 @@ import { computeAutoTaskStatus } from "@/lib/taskStatus";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import { GmailInbox } from "@/components/GmailInbox";
 import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
+import { GenerateMdButton } from "@/components/GenerateMdButton";
 import {
   IconSun,
   IconSunHigh,
@@ -254,6 +255,19 @@ export default async function HomePage() {
           <IconChartBar size={16} stroke={1.5} aria-hidden />
           Ver resumen semanal
         </Link>
+        {user.email === "eyro030311@gmail.com" && (
+          <GenerateMdButton
+            items={todayItems.map((i) => ({
+              title: i.title,
+              start_time: i.start_time,
+              all_day: i.all_day,
+              task_status: i.task_status,
+              categories: i.categories,
+            }))}
+            dateLabel={dateLabel}
+            tz={tz}
+          />
+        )}
       </div>
 
       {/* ── Metas (izquierda) | Recomendación de vestimenta + clima (derecha) ── */}
