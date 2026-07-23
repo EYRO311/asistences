@@ -30,13 +30,6 @@ function toLocalInputValue(date: Date): string {
   return local.toISOString().slice(0, 16);
 }
 
-// Tareas guardadas antes de validar esto pueden tener el fin en otro día que
-// el inicio (ej. un mes después) — al abrir editar, se corrige la fecha del
-// fin para que coincida con la de inicio, conservando la hora guardada.
-function clampEndToStartDay(startVal: string, endVal: string): string {
-  return endVal.slice(0, 10) === startVal.slice(0, 10) ? endVal : `${startVal.slice(0, 10)}T${endVal.slice(11)}`;
-}
-
 export function EditItemForm({ item }: { item: Item }) {
   const router = useRouter();
 
@@ -46,11 +39,13 @@ export function EditItemForm({ item }: { item: Item }) {
   const [startTime, setStartTime] = useState(
     item.start_time ? toLocalInputValue(new Date(item.start_time)) : toLocalInputValue(new Date())
   );
-  const [endTime, setEndTime] = useState(() => {
-    const start = item.start_time ? toLocalInputValue(new Date(item.start_time)) : toLocalInputValue(new Date());
-    const end = item.end_time ? toLocalInputValue(new Date(item.end_time)) : start;
-    return clampEndToStartDay(start, end);
-  });
+  const [endTime, setEndTime] = useState(
+    item.end_time
+      ? toLocalInputValue(new Date(item.end_time))
+      : item.start_time
+        ? toLocalInputValue(new Date(item.start_time))
+        : toLocalInputValue(new Date())
+  );
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<Priority | null>(item.priority);
   const [effort, setEffort] = useState<Effort | null>(item.effort);
@@ -88,10 +83,6 @@ export function EditItemForm({ item }: { item: Item }) {
     if (!showWorkSchedule) {
       if (new Date(endTime) <= new Date(startTime)) {
         sileo.error({ title: "Fechas inválidas", description: "La hora de fin debe ser posterior a la de inicio." });
-        return;
-      }
-      if (startTime.slice(0, 10) !== endTime.slice(0, 10)) {
-        sileo.error({ title: "Fechas inválidas", description: "La fecha de fin debe ser el mismo día que la de inicio." });
         return;
       }
     }

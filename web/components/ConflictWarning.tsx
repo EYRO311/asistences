@@ -42,6 +42,13 @@ export function ConflictWarning({ startTime, endTime, allDay, excludeItemId, onA
         setResult(null);
         return;
       }
+      // Las tareas de varios días son válidas, pero este chequeo compara
+      // contra los huecos libres de UN solo día — extenderlo a un rango de
+      // varios días daría falsos positivos, así que se omite.
+      if (startTime.slice(0, 10) !== endTime.slice(0, 10)) {
+        setResult(null);
+        return;
+      }
 
       try {
         const dayStart = new Date(start);

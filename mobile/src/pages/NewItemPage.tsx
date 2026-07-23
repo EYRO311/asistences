@@ -113,10 +113,6 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
         setError("La hora de fin debe ser posterior a la de inicio");
         return;
       }
-      if (startTime.slice(0, 10) !== endTime.slice(0, 10)) {
-        setError("La fecha de fin debe ser el mismo día que la de inicio");
-        return;
-      }
     }
 
     setLoading(true);
