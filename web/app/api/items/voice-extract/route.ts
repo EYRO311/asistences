@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
   }).format(now);
   const weekday = new Intl.DateTimeFormat("es-MX", { weekday: "long", timeZone: tz }).format(now);
 
+  // extractTaskFromSpeech ya no devuelve null: en el peor caso regresa un
+  // resultado de respaldo con el título tomado directo de la transcripción,
+  // así el dictado nunca se pierde por completo.
   const extraction = await extractTaskFromSpeech(parsed.data.transcript, { todayDate, nowTime, weekday });
-  if (!extraction) {
-    return NextResponse.json({ error: "No se pudo interpretar la nota de voz" }, { status: 502 });
-  }
 
   return NextResponse.json({ extraction });
 }

@@ -1,5 +1,4 @@
 import { GoogleGenAI } from "@google/genai";
-import { z } from "zod";
 import { CATEGORY_OPTIONS } from "@/lib/itemPresentation";
 import type { Category, Gender } from "@/lib/types";
 
@@ -300,21 +299,74 @@ export async function getDailyRecommendation(context: DailyRecommendationContext
 
 // ── Fase 4 del plan de implementación: crear una tarea hablando ─────────────
 
-const voiceExtractionSchema = z.object({
-  title: z.string().min(1),
-  category: z.enum(CATEGORY_OPTIONS as [Category, ...Category[]]).nullable(),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable(),
-  time: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .nullable(),
-  allDay: z.boolean(),
-});
+export interface VoiceTaskExtraction {
+  title: string;
+  category: Category | null;
+  date: string | null; // "YYYY-MM-DD"
+  time: string | null; // "HH:mm"
+  allDay: boolean;
+}
 
-export type VoiceTaskExtraction = z.infer<typeof voiceExtractionSchema>;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
+
+/** Compara ignorando mayúsculas/acentos, para que "trabajo" o "Cursos Extras" también matcheen. */
+function normalizeForMatch(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function coerceCategory(value: unknown): Category | null {
+  if (typeof value !== "string") return null;
+  const normalized = normalizeForMatch(value);
+  return CATEGORY_OPTIONS.find((c) => normalizeForMatch(c) === normalized) ?? null;
+}
+
+function coerceDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return DATE_RE.test(trimmed) ? trimmed : null;
+}
+
+function coerceTime(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return TIME_RE.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * Arma el resultado campo por campo en vez de validar todo el objeto de una
+ * sola vez: si Gemini responde con una categoría que no coincide exactamente,
+ * o una fecha/hora en un formato distinto, ese campo se descarta a null en
+ * vez de tirar TODA la extracción (incluido el título, que suele venir bien
+ * aunque algún otro campo no calce). Es la causa más probable de que "a
+ * veces funcione y a veces no": un solo campo imperfecto no debería perder
+ * el resto.
+ */
+function coerceExtraction(parsed: unknown, fallbackTitle: string): VoiceTaskExtraction {
+  const obj = (parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {}) as Record<
+    string,
+    unknown
+  >;
+  const title = typeof obj.title === "string" && obj.title.trim() ? obj.title.trim() : fallbackTitle;
+  const time = coerceTime(obj.time);
+  return {
+    title,
+    category: coerceCategory(obj.category),
+    date: coerceDate(obj.date),
+    time,
+    allDay: typeof obj.allDay === "boolean" ? obj.allDay : time === null,
+  };
+}
+
+/** Recorta la transcripción cruda a un título razonable cuando Gemini no da nada usable. */
+function titleFromTranscript(transcript: string): string {
+  const trimmed = transcript.trim();
+  return trimmed.length > 80 ? `${trimmed.slice(0, 77)}...` : trimmed;
+}
 
 /**
  * Extrae de una transcripción de voz los datos para prellenar el formulario
@@ -323,16 +375,25 @@ export type VoiceTaskExtraction = z.infer<typeof voiceExtractionSchema>;
  * no crea la tarea directamente (si Gemini entiende mal algo, el usuario lo
  * corrige antes de que se guarde nada).
  *
- * Responde en JSON estricto para poder parsear con seguridad; si Gemini
- * agrega texto extra alrededor (a veces pasa pese a la instrucción), se
- * extrae el primer bloque `{...}` de la respuesta antes de parsear.
+ * Nunca devuelve null: si Gemini no responde, o responde algo imposible de
+ * interpretar, se regresa un resultado de respaldo con el título tomado
+ * directo de la transcripción — así el dictado nunca se pierde del todo,
+ * peor caso el usuario solo tiene que poner fecha/hora/categoría a mano.
  */
 export async function extractTaskFromSpeech(
   transcript: string,
   context: { todayDate: string; nowTime: string; weekday: string }
-): Promise<VoiceTaskExtraction | null> {
+): Promise<VoiceTaskExtraction> {
+  const fallback: VoiceTaskExtraction = {
+    title: titleFromTranscript(transcript),
+    category: null,
+    date: null,
+    time: null,
+    allDay: true,
+  };
+
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return fallback;
 
   const prompt = [
     "Extrae de esta transcripción de voz los datos de una tarea/evento para una agenda personal.",
@@ -346,15 +407,15 @@ export async function extractTaskFromSpeech(
   ].join("\n");
 
   const raw = await generateWithFallback(apiKey, prompt);
-  if (!raw) return null;
+  if (!raw) return fallback;
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return null;
+  if (!jsonMatch) return fallback;
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return voiceExtractionSchema.parse(parsed);
+    return coerceExtraction(parsed, fallback.title);
   } catch {
-    return null;
+    return fallback;
   }
 }
