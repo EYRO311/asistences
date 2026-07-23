@@ -16,6 +16,8 @@ import { encryptClient } from "@/lib/crypto";
 import { Network } from "@capacitor/network";
 import { IconX } from "@tabler/icons-react";
 import { ConflictWarning } from "@/components/ConflictWarning";
+import { ImageTaskButton } from "@/components/ImageTaskButton";
+import type { TaskExtraction } from "@/lib/taskExtraction";
 
 // Categorías de meta no incluyen "Evento" (solo aplica a tareas)
 const GOAL_CATEGORY_OPTIONS = CATEGORY_OPTIONS.filter((c) => c !== "Evento");
@@ -101,6 +103,22 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
 
   function toggleDay(d: number) {
     setRecurrenceDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
+  }
+
+  // Prellena el formulario con lo que Gemini extrajo de una imagen — el
+  // usuario sigue revisando y confirmando con el botón normal.
+  function handleExtracted(extraction: TaskExtraction) {
+    setTitle(extraction.title);
+    if (extraction.category) setCategories([extraction.category]);
+    if (extraction.date) {
+      const time = extraction.time ?? "09:00";
+      setStartTime(`${extraction.date}T${time}`);
+    }
+    if (formMode === "completa") {
+      setAllDay(extraction.allDay);
+      if (extraction.location) setLocation(extraction.location);
+      if (extraction.description) setDescription(extraction.description);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -304,6 +322,12 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
             </button>
           ))}
         </div>
+
+        {mode === "tarea" && (
+          <div className="flex flex-wrap gap-2">
+            <ImageTaskButton onExtracted={handleExtracted} />
+          </div>
+        )}
 
         {/* Categoría (solo tarea) — primero: el tipo se deriva de aquí */}
         {mode === "tarea" && <CategoriesField categories={categories} onToggle={toggleCategory} />}

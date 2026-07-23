@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, createUserContent, createPartFromBase64, createPartFromText, type ContentListUnion } from "@google/genai";
 import { CATEGORY_OPTIONS } from "@/lib/itemPresentation";
 import type { Category, Gender } from "@/lib/types";
 
@@ -29,7 +29,7 @@ function userProfileLine(profile?: UserProfile | null): string | null {
 // or all fail. A model being deprecated is just as valid a reason to move to
 // the next candidate as hitting a quota limit — so every failure is treated
 // the same way here instead of only retrying on 429s.
-async function generateWithFallback(apiKey: string, prompt: string): Promise<string | null> {
+async function generateWithFallback(apiKey: string, contents: ContentListUnion): Promise<string | null> {
   const primaryModel = process.env.GEMINI_MODEL || DEFAULT_MODEL;
   const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
 
@@ -37,7 +37,7 @@ async function generateWithFallback(apiKey: string, prompt: string): Promise<str
 
   for (const model of modelsToTry) {
     try {
-      const response = await ai.models.generateContent({ model, contents: prompt });
+      const response = await ai.models.generateContent({ model, contents });
       const text = response.text?.trim();
       if (text) return text;
     } catch (err: unknown) {
@@ -298,13 +298,17 @@ export async function getDailyRecommendation(context: DailyRecommendationContext
 }
 
 // ── Fase 4 del plan de implementación: crear una tarea hablando ─────────────
+// (extendido después para crear una tarea a partir de una imagen — mismo
+// contrato de salida, comparte coerceExtraction)
 
-export interface VoiceTaskExtraction {
+export interface TaskExtraction {
   title: string;
   category: Category | null;
   date: string | null; // "YYYY-MM-DD"
   time: string | null; // "HH:mm"
   allDay: boolean;
+  location: string | null;
+  description: string | null;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -346,7 +350,7 @@ function coerceTime(value: unknown): string | null {
  * veces funcione y a veces no": un solo campo imperfecto no debería perder
  * el resto.
  */
-function coerceExtraction(parsed: unknown, fallbackTitle: string): VoiceTaskExtraction {
+function coerceExtraction(parsed: unknown, fallbackTitle: string): TaskExtraction {
   const obj = (parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {}) as Record<
     string,
     unknown
@@ -359,6 +363,8 @@ function coerceExtraction(parsed: unknown, fallbackTitle: string): VoiceTaskExtr
     date: coerceDate(obj.date),
     time,
     allDay: typeof obj.allDay === "boolean" ? obj.allDay : time === null,
+    location: typeof obj.location === "string" && obj.location.trim() ? obj.location.trim() : null,
+    description: typeof obj.description === "string" && obj.description.trim() ? obj.description.trim() : null,
   };
 }
 
@@ -383,13 +389,15 @@ function titleFromTranscript(transcript: string): string {
 export async function extractTaskFromSpeech(
   transcript: string,
   context: { todayDate: string; nowTime: string; weekday: string }
-): Promise<VoiceTaskExtraction> {
-  const fallback: VoiceTaskExtraction = {
+): Promise<TaskExtraction> {
+  const fallback: TaskExtraction = {
     title: titleFromTranscript(transcript),
     category: null,
     date: null,
     time: null,
     allDay: true,
+    location: null,
+    description: null,
   };
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -407,6 +415,68 @@ export async function extractTaskFromSpeech(
   ].join("\n");
 
   const raw = await generateWithFallback(apiKey, prompt);
+  if (!raw) return fallback;
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return fallback;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return coerceExtraction(parsed, fallback.title);
+  } catch {
+    return fallback;
+  }
+}
+
+// ── Crear una tarea a partir de una imagen (volante, invitación, captura de
+// pantalla, nota escrita a mano, etc.) ──────────────────────────────────────
+
+/**
+ * Extrae de una imagen los datos para prellenar el formulario de "Nueva
+ * tarea", igual que extractTaskFromSpeech pero a partir de una foto/captura
+ * en vez de una transcripción — mismo contrato de salida y misma regla de
+ * seguridad: solo prellena, el usuario revisa y confirma con el botón de
+ * crear antes de que se guarde nada.
+ *
+ * Nunca devuelve null: si Gemini no responde o no da nada interpretable, se
+ * regresa un resultado de respaldo genérico — el usuario llena a mano en
+ * vez de perder el intento por completo.
+ */
+export async function extractTaskFromImage(
+  imageBase64: string,
+  mimeType: string,
+  context: { todayDate: string; nowTime: string; weekday: string }
+): Promise<TaskExtraction> {
+  const fallback: TaskExtraction = {
+    title: "Tarea desde imagen",
+    category: null,
+    date: null,
+    time: null,
+    allDay: true,
+    location: null,
+    description: null,
+  };
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return fallback;
+
+  const prompt = [
+    "Esta imagen puede ser una invitación, un volante, una captura de pantalla, una nota escrita a mano, un boleto, o cualquier otra fuente con información de una tarea/evento para una agenda personal.",
+    "Extrae de la imagen los datos de esa tarea/evento.",
+    "Responde ÚNICAMENTE con un objeto JSON (sin texto adicional, sin comillas triples, sin explicación), con esta forma exacta:",
+    '{"title": string, "category": string|null, "date": "YYYY-MM-DD"|null, "time": "HH:mm"|null, "allDay": boolean, "location": string|null, "description": string|null}',
+    `"category" debe ser exactamente una de estas opciones, o null si ninguna aplica claramente: ${CATEGORY_OPTIONS.join(", ")}.`,
+    "\"location\" es la dirección o lugar del evento si aparece en la imagen, o null si no aparece.",
+    "\"description\" es cualquier detalle adicional relevante y breve (máximo 200 caracteres), o null si no hay nada que agregar.",
+    "Resuelve fechas y horas relativas ('mañana', 'el próximo sábado') usando la fecha/hora actual dadas abajo.",
+    "Si no hay ninguna hora específica visible, usa allDay=true y time=null. Si no hay fecha visible ni se puede inferir, usa date=null.",
+    "Si la imagen no parece contener información de una tarea o evento, responde con title=\"Tarea desde imagen\" y el resto en null.",
+    `Fecha actual: ${context.todayDate} (${context.weekday}). Hora actual: ${context.nowTime}.`,
+  ].join("\n");
+
+  const contents = createUserContent([createPartFromText(prompt), createPartFromBase64(imageBase64, mimeType)]);
+
+  const raw = await generateWithFallback(apiKey, contents);
   if (!raw) return fallback;
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);

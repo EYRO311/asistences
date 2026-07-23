@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { sileo } from "sileo";
 import { IconMicrophone, IconLoader2 } from "@tabler/icons-react";
-import type { Category } from "@/lib/types";
+import type { TaskExtraction } from "@/lib/taskExtraction";
+
+export type { TaskExtraction } from "@/lib/taskExtraction";
 
 // Fase 4 del plan de implementación: "crear una tarea hablando". Usa la Web
 // Speech API del navegador (Chrome/Edge; no todos los navegadores la
@@ -13,14 +15,6 @@ import type { Category } from "@/lib/types";
 // Solo PRELLENA el formulario; el usuario revisa y confirma con el botón de
 // crear normal, así que un error de transcripción o de interpretación no
 // puede guardar una tarea equivocada por sí solo.
-
-export interface VoiceExtraction {
-  title: string;
-  category: Category | null;
-  date: string | null; // "YYYY-MM-DD"
-  time: string | null; // "HH:mm"
-  allDay: boolean;
-}
 
 // SpeechRecognition no tiene tipos oficiales en lib.dom todavía en todos los
 // entornos — se define el mínimo necesario aquí.
@@ -63,7 +57,7 @@ const SPEECH_ERROR_MESSAGES: Record<string, string> = {
   aborted: "Se canceló la escucha.",
 };
 
-export function VoiceTaskButton({ onExtracted }: { onExtracted: (extraction: VoiceExtraction) => void }) {
+export function VoiceTaskButton({ onExtracted }: { onExtracted: (extraction: TaskExtraction) => void }) {
   const [status, setStatus] = useState<"idle" | "listening" | "confirming" | "processing">("idle");
   const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -80,7 +74,7 @@ export function VoiceTaskButton({ onExtracted }: { onExtracted: (extraction: Voi
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo interpretar la nota de voz");
-      onExtracted(data.extraction as VoiceExtraction);
+      onExtracted(data.extraction as TaskExtraction);
       sileo.success({ title: "Listo", description: `"${trimmed}"` });
     } catch (err) {
       sileo.error({
