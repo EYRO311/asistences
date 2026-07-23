@@ -50,22 +50,38 @@ function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+// Mensajes específicos por código de error de SpeechRecognition — antes se
+// mostraba el mismo mensaje genérico para todo, lo que hacía parecer
+// aleatorio cuando en realidad "no-speech" (no dijiste nada a tiempo) y
+// "network" (el servicio de reconocimiento del navegador falló) son cosas
+// distintas con distinta solución.
+const SPEECH_ERROR_MESSAGES: Record<string, string> = {
+  "no-speech": "No se detectó voz. Intenta de nuevo y habla justo después de tocar el botón.",
+  "audio-capture": "No se pudo acceder al micrófono. Revisa que esté conectado y disponible.",
+  "not-allowed": "Necesitas dar permiso de micrófono en el navegador para usar esto.",
+  network: "El servicio de reconocimiento de voz del navegador falló por conexión. Intenta de nuevo.",
+  aborted: "Se canceló la escucha.",
+};
+
 export function VoiceTaskButton({ onExtracted }: { onExtracted: (extraction: VoiceExtraction) => void }) {
-  const [status, setStatus] = useState<"idle" | "listening" | "processing">("idle");
+  const [status, setStatus] = useState<"idle" | "listening" | "confirming" | "processing">("idle");
+  const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
-  async function handleTranscript(transcript: string) {
+  async function sendToInterpret(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
     setStatus("processing");
     try {
       const res = await fetch("/api/items/voice-extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({ transcript: trimmed }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo interpretar la nota de voz");
       onExtracted(data.extraction as VoiceExtraction);
-      sileo.success({ title: "Escuchado", description: `"${transcript}"` });
+      sileo.success({ title: "Listo", description: `"${trimmed}"` });
     } catch (err) {
       sileo.error({
         title: "No se pudo interpretar",
@@ -73,6 +89,7 @@ export function VoiceTaskButton({ onExtracted }: { onExtracted: (extraction: Voi
       });
     } finally {
       setStatus("idle");
+      setTranscript("");
     }
   }
 
@@ -93,12 +110,20 @@ export function VoiceTaskButton({ onExtracted }: { onExtracted: (extraction: Voi
 
     recognition.onresult = (event) => {
       const last = event.results[event.results.length - 1];
-      const transcript = last?.[0]?.transcript?.trim();
-      if (transcript) handleTranscript(transcript);
+      const heard = last?.[0]?.transcript?.trim();
+      if (heard) {
+        setTranscript(heard);
+        setStatus("confirming");
+      } else {
+        setStatus("idle");
+      }
     };
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
       setStatus("idle");
-      sileo.error({ title: "Error de micrófono", description: "No se pudo escuchar. Intenta de nuevo." });
+      sileo.error({
+        title: "Error de micrófono",
+        description: SPEECH_ERROR_MESSAGES[event.error] ?? "No se pudo escuchar. Intenta de nuevo.",
+      });
     };
     recognition.onend = () => {
       setStatus((s) => (s === "listening" ? "idle" : s));
@@ -111,6 +136,43 @@ export function VoiceTaskButton({ onExtracted }: { onExtracted: (extraction: Voi
 
   function stopListening() {
     recognitionRef.current?.stop();
+  }
+
+  function cancelConfirmation() {
+    setStatus("idle");
+    setTranscript("");
+  }
+
+  if (status === "confirming") {
+    return (
+      <div className="rounded-md border border-border-soft p-2.5 space-y-2">
+        <p className="text-xs text-muted">Esto escuché — corrígelo si hace falta:</p>
+        <input
+          type="text"
+          value={transcript}
+          onChange={(e) => setTranscript(e.target.value)}
+          autoFocus
+          className="w-full rounded-md border border-border-soft bg-transparent px-2.5 py-1.5 text-sm"
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => sendToInterpret(transcript)}
+            disabled={!transcript.trim()}
+            className="rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+          >
+            Usar
+          </button>
+          <button
+            type="button"
+            onClick={cancelConfirmation}
+            className="rounded-md border border-border-soft px-3 py-1.5 text-sm hover:bg-surface"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
