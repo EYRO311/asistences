@@ -13,7 +13,9 @@ import {
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { LocationField } from "@/components/LocationField";
 import { ChipGroup } from "@/components/ChipGroup";
-import { VoiceTaskButton, type VoiceExtraction } from "@/components/VoiceTaskButton";
+import { VoiceTaskButton } from "@/components/VoiceTaskButton";
+import { ImageTaskButton } from "@/components/ImageTaskButton";
+import type { TaskExtraction } from "@/lib/taskExtraction";
 import { ConflictWarning } from "@/components/ConflictWarning";
 import { nextOccurrence } from "@/lib/recurrence";
 import { sileo } from "sileo";
@@ -137,9 +139,9 @@ function NewItemForm() {
     );
   }
 
-  // Fase 4: prellena el formulario con lo que Gemini extrajo de la nota de
-  // voz — el usuario sigue revisando y confirmando con el botón normal.
-  function handleVoiceExtracted(extraction: VoiceExtraction) {
+  // Prellena el formulario con lo que Gemini extrajo (voz o imagen) — el
+  // usuario sigue revisando y confirmando con el botón normal.
+  function handleExtracted(extraction: TaskExtraction) {
     setTitle(extraction.title);
     if (extraction.category) setCategories([extraction.category]);
     if (extraction.date) {
@@ -148,6 +150,8 @@ function NewItemForm() {
     }
     if (formMode === "completa") {
       setAllDay(extraction.allDay);
+      if (extraction.location) setLocation(extraction.location);
+      if (extraction.description) setDescription(extraction.description);
     }
   }
 
@@ -326,7 +330,10 @@ function NewItemForm() {
         {/* ════════════ TAREA ════════════ */}
         {mode === "tarea" && (
           <>
-            <VoiceTaskButton onExtracted={handleVoiceExtracted} />
+            <div className="flex flex-wrap gap-2">
+              <VoiceTaskButton onExtracted={handleExtracted} />
+              <ImageTaskButton onExtracted={handleExtracted} />
+            </div>
 
             <CategoriesField categories={categories} onToggle={toggleCategory} />
 
