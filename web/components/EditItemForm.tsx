@@ -326,7 +326,7 @@ export function EditItemForm({ item }: { item: Item }) {
       </div>
 
       <div className="flex justify-end border-t border-border-soft pt-4">
-        <DeleteItemButton itemId={item.id} label="Eliminar tarea" />
+        <DeleteItemButton itemId={item.id} />
       </div>
     </form>
   );

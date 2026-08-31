@@ -459,18 +459,20 @@ export function ItemDetailModal({ item, onClose }: { item: Item; onClose: () => 
 
   return (
     <>
-      {/* Desktop backdrop */}
+      {/* Backdrop (visible en móvil y desktop) */}
       <div
-        className="hidden md:block fixed inset-0 z-50 bg-black/60"
+        className="fixed inset-0 z-40 bg-black/60 transition-opacity animate-in fade-in duration-300"
         onClick={onClose}
         aria-hidden
       />
 
-      {/* Modal */}
+      {/* Modal / Bottom Sheet */}
       <div
         className="
-          fixed inset-0 z-50 flex flex-col bg-surface border-border-soft overflow-hidden
-          md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2
+          fixed inset-x-0 bottom-0 z-50 flex flex-col bg-surface border-t border-border-soft overflow-hidden
+          h-[92vh] rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)]
+          transition-transform transform translate-y-0 animate-in slide-in-from-bottom-8 duration-300
+          md:h-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2
           md:w-full md:max-w-3xl lg:max-w-5xl md:max-h-[92vh] md:rounded-2xl md:border md:shadow-xl
         "
         onClick={(e) => e.stopPropagation()}

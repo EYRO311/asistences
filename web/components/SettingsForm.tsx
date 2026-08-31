@@ -279,7 +279,7 @@ export function SettingsForm({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Ej. Ana García"
-              className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border-soft bg-transparent px-3 py-2 text-base sm:text-sm"
             />
           </div>
 

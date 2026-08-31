@@ -7,7 +7,7 @@ import { decryptClient } from "@/lib/crypto-client";
 import { DeleteItemButton } from "@/components/DeleteItemButton";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { TYPE_BADGE_COLORS, TYPE_LABELS, STATUS_LABELS, formatDateRange } from "@/lib/itemPresentation";
-import { IconShirt } from "@tabler/icons-react";
+import { IconShirt, IconEdit } from "@tabler/icons-react";
 
 function ItemDescriptionPreview({ description }: { description: string | null }) {
   const [plain, setPlain] = useState<string | null>(null);
@@ -75,12 +75,14 @@ export function ItemList({ items }: { items: Item[] }) {
             </button>
 
             {/* Acciones rápidas siempre visibles */}
-            <div className="flex flex-col items-end gap-1 shrink-0">
+            <div className="flex flex-row sm:flex-col items-center sm:items-end gap-1 shrink-0">
               <Link
                 href={`/items/${item.id}/editar`}
-                className="text-xs text-muted underline hover:text-foreground"
+                className="p-2 text-muted hover:text-foreground transition-colors rounded-full hover:bg-surface"
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Editar tarea"
               >
-                Editar
+                <IconEdit size={18} aria-hidden />
               </Link>
               <DeleteItemButton itemId={item.id} />
             </div>

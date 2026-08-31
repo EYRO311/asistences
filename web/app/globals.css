@@ -128,3 +128,12 @@ body {
 [data-sileo-viewport][data-theme=light] [data-sileo-description] {
   color: rgba(255, 255, 255, 0.9) !important;
 }
+
+/* Fix iOS Auto-Zoom en inputs */
+@media screen and (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
