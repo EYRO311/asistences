@@ -13,6 +13,8 @@ import { GoalList, type GoalRow } from "@/components/GoalList";
 import { EditGoalPage } from "@/pages/EditGoalPage";
 import { RecentEmails } from "@/components/RecentEmails";
 import { DailyRecommendationButton } from "@/components/DailyRecommendationButton";
+import { GenerateMdButton } from "@/components/GenerateMdButton";
+import { getDisplayTimezone } from "@/lib/timezone";
 import type { PreferredTransport } from "@/lib/types";
 import {
   IconChevronDown,
@@ -209,9 +211,24 @@ export function HomePage({ items, session, onSettings, onSync, syncing, pendingC
 
       {/* Arriba: día + bienvenida */}
       <p className="text-xs text-muted capitalize px-0.5">{dayLabel}</p>
-      <h1 className="font-handwriting text-2xl mb-4 px-0.5">
+      <h1 className="font-handwriting text-2xl px-0.5">
         {greeting()}{firstName ? `, ${firstName}` : ""}
       </h1>
+      <div className="mb-4 px-0.5">
+        {session.user.email === "eyro030311@gmail.com" && (
+          <GenerateMdButton
+            items={dayItems.map((i) => ({
+              title: i.title,
+              start_time: i.start_time,
+              all_day: i.all_day,
+              task_status: i.task_status,
+              categories: i.categories,
+            }))}
+            dateLabel={dayLabel}
+            tz={getDisplayTimezone()}
+          />
+        )}
+      </div>
 
       {/* Metas */}
       <section className="mb-4">

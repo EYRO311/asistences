@@ -5,11 +5,12 @@ import type { Session } from "@supabase/supabase-js";
 import type { Gender, PreferredTransport } from "@/lib/types";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
 import { getIntegrations, disconnectIntegration, type Integration } from "@/lib/integrations";
-import { IconX, IconSun, IconMoon, IconDeviceLaptop, IconCalendar, IconBrandNotion, IconCheck, IconUnlink } from "@tabler/icons-react";
+import { IconX, IconSun, IconMoon, IconDeviceLaptop, IconWaveSine, IconTree, IconCalendar, IconBrandNotion, IconCheck, IconUnlink } from "@tabler/icons-react";
 import { LocationField } from "@/components/LocationField";
 import { NotionHelpModal } from "@/components/NotionHelpModal";
 import { setDisplayTimezone } from "@/lib/timezone";
 import { REMINDER_OPTIONS, requestNotificationPermission, type ReminderSettings } from "@/lib/notifications";
+import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
 import { IconBell, IconBellOff } from "@tabler/icons-react";
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
@@ -21,29 +22,11 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
 
 const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
 
-type Theme = "light" | "dark" | "system";
-
 interface Props {
   session: Session;
   onClose: () => void;
   reminderSettings: ReminderSettings;
   onReminderSettingsChange: (settings: ReminderSettings) => void;
-}
-
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === "dark") {
-    root.classList.add("dark");
-  } else if (theme === "light") {
-    root.classList.remove("dark");
-  } else {
-    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-  }
-  localStorage.setItem("theme", theme);
 }
 
 export function SettingsPage({ session, onClose, reminderSettings, onReminderSettingsChange }: Props) {
@@ -60,7 +43,7 @@ export function SettingsPage({ session, onClose, reminderSettings, onReminderSet
   const [sleepTime, setSleepTime] = useState("23:00");
   const [notionDatabaseId, setNotionDatabaseId] = useState("");
   const [showNotionHelp, setShowNotionHelp] = useState(false);
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("theme") as Theme) ?? "system");
+  const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -174,6 +157,8 @@ export function SettingsPage({ session, onClose, reminderSettings, onReminderSet
   const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
     { value: "light", label: "Claro", Icon: IconSun },
     { value: "dark", label: "Oscuro", Icon: IconMoon },
+    { value: "theme-ocean", label: "Océano", Icon: IconWaveSine },
+    { value: "theme-forest", label: "Bosque", Icon: IconTree },
     { value: "system", label: "Sistema", Icon: IconDeviceLaptop },
   ];
 
@@ -192,13 +177,13 @@ export function SettingsPage({ session, onClose, reminderSettings, onReminderSet
         {/* Tema */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">Tema</label>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {THEME_OPTIONS.map(({ value, label, Icon }) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => handleThemeChange(value)}
-                className={`flex-1 flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs transition-colors ${
+                className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs transition-colors ${
                   theme === value
                     ? "border-foreground bg-foreground text-background"
                     : "border-border-soft text-muted"

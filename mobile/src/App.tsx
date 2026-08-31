@@ -10,6 +10,7 @@ import { Browser } from "@capacitor/browser";
 import type { Session } from "@supabase/supabase-js";
 import type { Item } from "@/lib/types";
 import { setDisplayTimezone } from "@/lib/timezone";
+import { applyTheme, type Theme } from "@/lib/theme";
 import { LoginPage } from "@/pages/LoginPage";
 import { HomePage } from "@/pages/HomePage";
 import { WeekPage } from "@/pages/WeekPage";
@@ -53,12 +54,15 @@ export default function App() {
       if (data.session?.user) {
         supabase
           .from("profiles")
-          .select("timezone, reminders_enabled, reminder_minutes_before")
+          .select("timezone, reminders_enabled, reminder_minutes_before, theme")
           .eq("id", data.session.user.id)
           .single()
           .then(({ data: p }) => {
             if (p?.timezone) setDisplayTimezone(p.timezone);
             if (p) setReminderSettings({ enabled: p.reminders_enabled ?? false, minutesBefore: p.reminder_minutes_before ?? 15 });
+            // El tema del perfil manda (igual que web/app/layout.tsx) — así un
+            // cambio hecho en otro dispositivo se ve reflejado al abrir la app.
+            if (p?.theme) applyTheme(p.theme as Theme);
           });
       }
     });
@@ -82,12 +86,15 @@ export default function App() {
       if (s?.user) {
         supabase
           .from("profiles")
-          .select("timezone, reminders_enabled, reminder_minutes_before")
+          .select("timezone, reminders_enabled, reminder_minutes_before, theme")
           .eq("id", s.user.id)
           .single()
           .then(({ data: p }) => {
             if (p?.timezone) setDisplayTimezone(p.timezone);
             if (p) setReminderSettings({ enabled: p.reminders_enabled ?? false, minutesBefore: p.reminder_minutes_before ?? 15 });
+            // El tema del perfil manda (igual que web/app/layout.tsx) — así un
+            // cambio hecho en otro dispositivo se ve reflejado al abrir la app.
+            if (p?.theme) applyTheme(p.theme as Theme);
           });
       }
     });
