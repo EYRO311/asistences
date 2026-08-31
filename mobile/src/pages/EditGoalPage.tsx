@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { decryptClient, encryptClient } from "@/lib/crypto";
 import { Network } from "@capacitor/network";
 import { IconX } from "@tabler/icons-react";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 const GOAL_RECURRENCES: { value: GoalRecurrence; label: string }[] = [
   { value: "none", label: "Única" },
@@ -29,9 +30,10 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  onGoToSettings?: () => void;
 }
 
-export function EditGoalPage({ goalId, onClose, onSaved, onDeleted }: Props) {
+export function EditGoalPage({ goalId, onClose, onSaved, onDeleted, onGoToSettings }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -239,7 +241,7 @@ export function EditGoalPage({ goalId, onClose, onSaved, onDeleted }: Props) {
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <ErrorBanner error={error} onGoToSettings={onGoToSettings} />}
 
           <button
             type="submit"

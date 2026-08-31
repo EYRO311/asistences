@@ -28,14 +28,14 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border-soft bg-surface pb-[env(safe-area-inset-bottom)] xs:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border-soft bg-surface/80 backdrop-blur-md pb-[env(safe-area-inset-bottom)] xs:hidden">
       <div className="relative mx-auto flex h-16 max-w-md items-center justify-between px-6">
         {LINKS.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className={`flex flex-col items-center gap-0.5 text-[11px] ${
-              isActive(link.href) ? "text-foreground" : "text-muted"
+            className={`flex flex-col items-center gap-0.5 text-[11px] transition-transform active:scale-95 ${
+              isActive(link.href) ? "text-foreground" : "text-muted hover:text-foreground"
             }`}
           >
             <link.Icon size={22} stroke={1.5} aria-hidden />
@@ -46,7 +46,7 @@ export function MobileBottomNav() {
         <Link
           href="/new"
           aria-label="Nueva tarea"
-          className="absolute left-1/2 top-0 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-foreground text-background shadow-lg"
+          className="absolute left-1/2 top-0 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:scale-105 active:scale-95 transition-transform"
         >
           <span className="text-2xl leading-none">+</span>
         </Link>
@@ -56,8 +56,8 @@ export function MobileBottomNav() {
           <Link
             key={link.href}
             href={link.href}
-            className={`flex flex-col items-center gap-0.5 text-[11px] ${
-              isActive(link.href) ? "text-foreground" : "text-muted"
+            className={`flex flex-col items-center gap-0.5 text-[11px] transition-transform active:scale-95 ${
+              isActive(link.href) ? "text-foreground" : "text-muted hover:text-foreground"
             }`}
           >
             <link.Icon size={22} stroke={1.5} aria-hidden />

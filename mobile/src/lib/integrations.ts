@@ -6,12 +6,13 @@ export interface Integration {
   provider: Provider;
   connected: boolean;
   workspace_name?: string | null;
+  scope?: string | null;
 }
 
 export async function getIntegrations(userId: string): Promise<Integration[]> {
   const { data } = await supabase
     .from("integrations")
-    .select("provider, metadata")
+    .select("provider, metadata, scope")
     .eq("user_id", userId);
 
   const google: Integration = { provider: "google", connected: false };
@@ -20,6 +21,7 @@ export async function getIntegrations(userId: string): Promise<Integration[]> {
   for (const row of data ?? []) {
     if (row.provider === "google") {
       google.connected = true;
+      google.scope = row.scope ?? null;
     } else if (row.provider === "notion") {
       notion.connected = true;
       notion.workspace_name = row.metadata?.workspace_name ?? null;

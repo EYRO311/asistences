@@ -21,6 +21,7 @@ import {
   IconShirt,
   IconChartBar,
 } from "@tabler/icons-react";
+import { FadeIn } from "@/components/FadeIn";
 
 // ── Weather helpers ─────────────────────────────────────────────────────────
 
@@ -271,7 +272,7 @@ export default async function HomePage() {
       </div>
 
       {/* ── Metas (izquierda) | Recomendación de vestimenta + clima (derecha) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <FadeIn delay={0.1} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-medium">Mis metas</h2>
@@ -282,7 +283,7 @@ export default async function HomePage() {
           {activeGoals.length > 0 ? (
             <GoalList goals={activeGoals} />
           ) : (
-            <div className="rounded-xl border border-border-soft bg-surface px-4 py-6 text-center">
+            <div className="rounded-2xl border border-border-soft bg-surface/50 backdrop-blur-md shadow-sm px-4 py-6 text-center">
               <p className="text-sm text-muted">No tienes metas activas.</p>
             </div>
           )}
@@ -290,7 +291,7 @@ export default async function HomePage() {
 
         <section>
           <h2 className="font-medium mb-3">Recomendación de hoy</h2>
-          <div className="rounded-xl border border-border-soft bg-surface p-4 space-y-3">
+          <div className="rounded-2xl border border-border-soft bg-surface/50 backdrop-blur-md shadow-sm p-4 space-y-3">
             {weather ? (
               <div className="flex items-center gap-3">
                 <WeatherIcon desc={weather.description} size={32} />
@@ -340,11 +341,12 @@ export default async function HomePage() {
             />
           </div>
         </section>
-      </div>
+      </FadeIn>
 
       {/* ── Tiempo libre hoy ── */}
       {freeSlots.length > 0 && (
-        <details className="rounded-xl border border-border-soft bg-surface group">
+        <FadeIn delay={0.2}>
+          <details className="rounded-2xl border border-border-soft bg-surface/50 backdrop-blur-md shadow-sm group">
           <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
             <span className="font-medium text-sm">Tiempo libre hoy</span>
             <div className="flex items-center gap-3">
@@ -369,9 +371,11 @@ export default async function HomePage() {
             ))}
           </div>
         </details>
+        </FadeIn>
       )}
 
       {/* ── Abajo: tareas de hoy ── */}
+      <FadeIn delay={0.3}>
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-medium">Tareas de hoy</h2>
@@ -381,7 +385,7 @@ export default async function HomePage() {
         </div>
 
         {allDayItems.length === 0 && timedItems.length === 0 ? (
-          <div className="rounded-lg border border-border-soft bg-surface px-4 py-6 text-center">
+          <div className="rounded-2xl border border-border-soft bg-surface/50 backdrop-blur-md shadow-sm px-4 py-6 text-center">
             <p className="text-sm text-muted">No tienes eventos hoy.</p>
             <Link
               href="/new"
@@ -396,7 +400,7 @@ export default async function HomePage() {
               <Link
                 key={item.id}
                 href={`/items/${item.id}/editar`}
-                className="flex items-center gap-3 rounded-lg border border-border-soft bg-surface px-3 py-2.5 hover:bg-background transition-colors"
+                className="flex items-center gap-3 rounded-2xl border border-border-soft bg-surface/50 backdrop-blur-sm px-3 py-2.5 hover:bg-background hover:scale-[1.01] hover:shadow-md transition-all"
               >
                 <span
                   className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${TYPE_BADGE_COLORS[item.type]}`}
@@ -420,10 +424,10 @@ export default async function HomePage() {
                 <Link
                   key={item.id}
                   href={`/items/${item.id}/editar`}
-                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-background transition-colors ${
+                  className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 hover:bg-background hover:scale-[1.01] hover:shadow-md transition-all ${
                     isNow
-                      ? "border-foreground bg-surface"
-                      : "border-border-soft bg-surface"
+                      ? "border-foreground bg-surface/70 shadow-sm"
+                      : "border-border-soft bg-surface/50 backdrop-blur-sm"
                   } ${isPast ? "opacity-50" : ""}`}
                 >
                   <div className="shrink-0 text-right w-14">
@@ -467,9 +471,11 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+      </FadeIn>
 
       {/* ── Pendientes ── */}
       {pending.length > 0 && (
+        <FadeIn delay={0.4}>
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-medium">Pendientes</h2>
@@ -485,7 +491,7 @@ export default async function HomePage() {
                 <Link
                   key={item.id}
                   href={`/items/${item.id}/editar`}
-                  className="flex items-center gap-3 rounded-lg border border-border-soft bg-surface px-3 py-2.5 hover:bg-background transition-colors"
+                  className="flex items-center gap-3 rounded-2xl border border-border-soft bg-surface/50 backdrop-blur-sm px-3 py-2.5 hover:bg-background hover:scale-[1.01] hover:shadow-md transition-all"
                 >
                   <span
                     className={`w-2 h-2 rounded-full shrink-0 ${
@@ -512,10 +518,13 @@ export default async function HomePage() {
             })}
           </div>
         </section>
+        </FadeIn>
       )}
 
       {/* ── Abajo: correos ── */}
-      <GmailInbox />
+      <FadeIn delay={0.5}>
+        <GmailInbox />
+      </FadeIn>
     </main>
   );
 }

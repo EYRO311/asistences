@@ -22,6 +22,8 @@ import { EditItemPage } from "@/pages/EditItemPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { BottomNav } from "@/components/BottomNav";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { rescheduleReminders, type ReminderSettings } from "@/lib/notifications";
 
 export type Page = "home" | "week" | "month" | "tasks" | "goals" | "reports" | "new";
 
@@ -39,6 +41,9 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [integrationToast, setIntegrationToast] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncSummary, setSyncSummary] = useState<string | null>(null);
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>({ enabled: false, minutesBefore: 15 });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -48,10 +53,13 @@ export default function App() {
       if (data.session?.user) {
         supabase
           .from("profiles")
-          .select("timezone")
+          .select("timezone, reminders_enabled, reminder_minutes_before")
           .eq("id", data.session.user.id)
           .single()
-          .then(({ data: p }) => { if (p?.timezone) setDisplayTimezone(p.timezone); });
+          .then(({ data: p }) => {
+            if (p?.timezone) setDisplayTimezone(p.timezone);
+            if (p) setReminderSettings({ enabled: p.reminders_enabled ?? false, minutesBefore: p.reminder_minutes_before ?? 15 });
+          });
       }
     });
     // Handle OAuth deep link callbacks (com.eyro.agenda://auth/*/success|error)
@@ -74,10 +82,13 @@ export default function App() {
       if (s?.user) {
         supabase
           .from("profiles")
-          .select("timezone")
+          .select("timezone, reminders_enabled, reminder_minutes_before")
           .eq("id", s.user.id)
           .single()
-          .then(({ data: p }) => { if (p?.timezone) setDisplayTimezone(p.timezone); });
+          .then(({ data: p }) => {
+            if (p?.timezone) setDisplayTimezone(p.timezone);
+            if (p) setReminderSettings({ enabled: p.reminders_enabled ?? false, minutesBefore: p.reminder_minutes_before ?? 15 });
+          });
       }
     });
     return () => {
@@ -96,6 +107,13 @@ export default function App() {
     setItems(fresh);
     setPendingCount(count);
   }
+
+  // Reprograma los recordatorios locales cada vez que cambian los items o las
+  // preferencias — ver mobile/src/lib/notifications.ts.
+  useEffect(() => {
+    if (!session?.user) return;
+    rescheduleReminders(items, reminderSettings).catch((err) => console.error("No se pudieron reprogramar recordatorios:", err));
+  }, [items, reminderSettings, session]);
 
   // Al iniciar sesión, corrige el estado de las tareas (sin_empezar/en_curso/
   // listo) según la hora actual — funciona offline, es local y se sincroniza
@@ -158,11 +176,25 @@ export default function App() {
     const status = await Network.getStatus();
     if (!status.connected) return;
     setSyncing(true);
+    setSyncError(null);
+    setSyncSummary(null);
     try {
-      await forceSyncAll(session.user.id);
+      const result = await forceSyncAll(session.user.id);
       await refreshItems();
+      if (result) {
+        const imported = result.importedFromGoogle + result.importedFromNotion;
+        const parts: string[] = [];
+        if (imported > 0) parts.push(`${imported} importada${imported > 1 ? "s" : ""}`);
+        if (result.mergedDuplicates > 0) parts.push(`${result.mergedDuplicates} duplicado${result.mergedDuplicates > 1 ? "s" : ""} unidos`);
+        setSyncSummary(parts.length > 0 ? parts.join(", ") : "Sin novedades");
+        if (result.errors.length > 0) {
+          setSyncError(result.errors[0]);
+        }
+        setTimeout(() => setSyncSummary(null), 5000);
+      }
     } catch (err) {
       console.error("Manual sync failed:", err);
+      setSyncError(err instanceof Error ? err.message : "No se pudo sincronizar");
     } finally {
       setSyncing(false);
     }
@@ -205,6 +237,18 @@ export default function App() {
         </button>
       </div>
 
+      {syncSummary && !syncError && (
+        <div className="shrink-0 px-4 pt-3">
+          <p className="rounded-xl border border-border-soft bg-surface px-4 py-2 text-xs text-muted text-center">{syncSummary}</p>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="shrink-0 px-4 pt-3">
+          <ErrorBanner error={syncError} onDismiss={() => setSyncError(null)} onGoToSettings={() => { setSyncError(null); setShowSettings(true); }} />
+        </div>
+      )}
+
       <main className="flex-1 overflow-y-auto" style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}>
         {currentPage === "home"  && <HomePage  items={items} onRefresh={refreshItems} session={session} {...sharedProps} />}
         {currentPage === "week"  && <WeekPage  items={items} {...sharedProps} />}
@@ -245,11 +289,17 @@ export default function App() {
               setCurrentPage("home");
             }
           }}
+          onGoToSettings={() => { setShowNew(false); setShowSettings(true); }}
         />
       )}
 
       {showSettings && (
-        <SettingsPage session={session} onClose={() => setShowSettings(false)} />
+        <SettingsPage
+          session={session}
+          onClose={() => setShowSettings(false)}
+          reminderSettings={reminderSettings}
+          onReminderSettingsChange={setReminderSettings}
+        />
       )}
 
       {selectedItem && (
@@ -266,6 +316,7 @@ export default function App() {
           onClose={() => setEditingItem(null)}
           onSaved={() => { setEditingItem(null); refreshItems(); }}
           onDeleted={() => { setEditingItem(null); refreshItems(); }}
+          onGoToSettings={() => { setEditingItem(null); setShowSettings(true); }}
         />
       )}
 

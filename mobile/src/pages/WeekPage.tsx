@@ -4,6 +4,8 @@ import { occurrenceForDate } from "@/lib/recurrence";
 import { ItemCard } from "@/components/ItemCard";
 import { AppHeader } from "@/components/AppHeader";
 import { FreeSlots } from "@/components/FreeSlots";
+import { DayTimeline } from "@/components/DayTimeline";
+import { IconClock, IconList } from "@tabler/icons-react";
 
 function startOfDay(d: Date) { const r = new Date(d); r.setHours(0, 0, 0, 0); return r; }
 function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
@@ -24,7 +26,13 @@ export function WeekPage({ items, onSettings, onSync, syncing, pendingCount, onI
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(today, i - 3)), [today]);
 
   const [selectedIndex, setSelectedIndex] = useState(3);
+  const [view, setView] = useState<"timeline" | "list">(() => (localStorage.getItem("weekView") as "timeline" | "list") ?? "timeline");
   const touchStartX = useRef<number | null>(null);
+
+  function changeView(v: "timeline" | "list") {
+    setView(v);
+    localStorage.setItem("weekView", v);
+  }
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, Item[]>();
@@ -99,19 +107,52 @@ export function WeekPage({ items, onSettings, onSync, syncing, pendingCount, onI
       >
         <FreeSlots />
 
-        {/* Day title */}
-        <p className="text-xs text-muted capitalize mb-3 px-0.5">
-          {isToday ? <span className="text-foreground font-semibold">Hoy · </span> : null}
-          {dayLabel}
-        </p>
+        {/* Day title + toggle lista/línea de tiempo */}
+        <div className="flex items-center justify-between mb-3 px-0.5">
+          <p className="text-xs text-muted capitalize">
+            {isToday ? <span className="text-foreground font-semibold">Hoy · </span> : null}
+            {dayLabel}
+          </p>
+          <div className="flex gap-1 rounded-lg border border-border-soft p-0.5">
+            <button
+              type="button"
+              onClick={() => changeView("timeline")}
+              aria-label="Vista de línea de tiempo"
+              className={`rounded-md p-1 transition-colors ${view === "timeline" ? "bg-foreground text-background" : "text-muted"}`}
+            >
+              <IconClock size={14} stroke={1.75} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => changeView("list")}
+              aria-label="Vista de lista"
+              className={`rounded-md p-1 transition-colors ${view === "list" ? "bg-foreground text-background" : "text-muted"}`}
+            >
+              <IconList size={14} stroke={1.75} aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        {/* Items de todo el día */}
+        {dayItems.some((i) => i.all_day) && (
+          <div className="space-y-2 mb-3">
+            {dayItems.filter((i) => i.all_day).map((item) => (
+              <ItemCard key={`${item.id}-${selectedKey}-allday`} item={item} onClick={() => onItemClick(item)} />
+            ))}
+          </div>
+        )}
 
         {dayItems.length === 0 ? (
           <div className="rounded-2xl border border-border-soft bg-surface px-5 py-6 text-center mb-3">
             <p className="text-sm text-muted">Sin eventos</p>
           </div>
+        ) : view === "timeline" ? (
+          <div className="mb-3">
+            <DayTimeline items={dayItems} onItemClick={onItemClick} />
+          </div>
         ) : (
           <div className="space-y-2 mb-3">
-            {dayItems.map((item) => (
+            {dayItems.filter((i) => !i.all_day).map((item) => (
               <ItemCard key={`${item.id}-${selectedKey}`} item={item} onClick={() => onItemClick(item)} />
             ))}
           </div>

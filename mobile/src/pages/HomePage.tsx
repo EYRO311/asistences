@@ -110,7 +110,7 @@ function pickOutfit(dayItems: Item[]): { text: string; fromTitle: string } | nul
     ...dayItems.filter((i) => !i.recurrence_days?.length && i.type === "compromiso"),
     ...dayItems.filter((i) => !i.recurrence_days?.length && i.type === "evento"),
     ...dayItems.filter((i) => !i.recurrence_days?.length && i.type === "personal"),
-    ...dayItems.filter((i) => i.recurrence_days?.length ?? 0 > 0),
+    ...dayItems.filter((i) => (i.recurrence_days?.length ?? 0) > 0),
   ];
   for (const item of sorted) {
     const text =

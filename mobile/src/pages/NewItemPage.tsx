@@ -17,6 +17,9 @@ import { Network } from "@capacitor/network";
 import { IconX } from "@tabler/icons-react";
 import { ConflictWarning } from "@/components/ConflictWarning";
 import { ImageTaskButton } from "@/components/ImageTaskButton";
+import { VoiceTaskButton } from "@/components/VoiceTaskButton";
+import { LocationField } from "@/components/LocationField";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import type { TaskExtraction } from "@/lib/taskExtraction";
 
 // Categorías de meta no incluyen "Evento" (solo aplica a tareas)
@@ -65,9 +68,10 @@ interface Props {
   userId: string;
   initialMode?: CreationMode;
   lockMode?: boolean;
+  onGoToSettings?: () => void;
 }
 
-export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea", lockMode = false }: Props) {
+export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea", lockMode = false, onGoToSettings }: Props) {
   const [mode, setMode] = useState<CreationMode>(initialMode);
   const [formMode, setFormMode] = useState<FormMode>("rapida");
   const [goalRecurrence, setGoalRecurrence] = useState<GoalRecurrence>("none");
@@ -325,6 +329,7 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
 
         {mode === "tarea" && (
           <div className="flex flex-wrap gap-2">
+            <VoiceTaskButton onExtracted={handleExtracted} />
             <ImageTaskButton onExtracted={handleExtracted} />
           </div>
         )}
@@ -425,12 +430,7 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
                 </div>
                 <div>
                   <label className="block text-xs text-muted mb-1">Ubicación</label>
-                  <input
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Calle, ciudad..."
-                    className="w-full rounded-xl border border-border-soft bg-surface px-3 py-2.5 text-sm"
-                  />
+                  <LocationField id="rutina-loc" value={location} onChange={setLocation} />
                 </div>
                 <div>
                   <label className="block text-xs text-muted mb-1">Categoría</label>
@@ -538,13 +538,7 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
               <label htmlFor="loc" className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
                 Ubicación
               </label>
-              <input
-                id="loc"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Calle, ciudad..."
-                className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm"
-              />
+              <LocationField id="loc" value={location} onChange={setLocation} />
             </div>
 
             <div>
@@ -655,7 +649,7 @@ export function NewItemPage({ onClose, onCreated, userId, initialMode = "tarea",
           </div>
         )}
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <ErrorBanner error={error} onGoToSettings={onGoToSettings} />}
 
         {/* Submit */}
         <button

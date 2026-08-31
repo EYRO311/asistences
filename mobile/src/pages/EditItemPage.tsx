@@ -15,6 +15,8 @@ import { updateLocalItem, deleteLocalItem } from "@/db/items";
 import { decryptClient, encryptClient } from "@/lib/crypto";
 import { IconX } from "@tabler/icons-react";
 import { ConflictWarning } from "@/components/ConflictWarning";
+import { LocationField } from "@/components/LocationField";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 function toLocalInputValue(date: Date) {
   const offset = date.getTimezoneOffset();
@@ -31,9 +33,10 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  onGoToSettings?: () => void;
 }
 
-export function EditItemPage({ item, onClose, onSaved, onDeleted }: Props) {
+export function EditItemPage({ item, onClose, onSaved, onDeleted, onGoToSettings }: Props) {
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
@@ -313,13 +316,7 @@ export function EditItemPage({ item, onClose, onSaved, onDeleted }: Props) {
           <label htmlFor="loc" className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
             Ubicación
           </label>
-          <input
-            id="loc"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Calle, ciudad..."
-            className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm focus:outline-none"
-          />
+          <LocationField id="loc" value={location} onChange={setLocation} />
         </div>
 
         {/* Prioridad */}
@@ -388,7 +385,7 @@ export function EditItemPage({ item, onClose, onSaved, onDeleted }: Props) {
           </p>
         )}
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <ErrorBanner error={error} onGoToSettings={onGoToSettings} />}
 
         <button
           type="submit"
