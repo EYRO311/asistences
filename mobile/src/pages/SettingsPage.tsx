@@ -6,6 +6,11 @@ import type { Gender, PreferredTransport } from "@/lib/types";
 import { TRANSPORT_OPTIONS } from "@/lib/itemPresentation";
 import { getIntegrations, disconnectIntegration, type Integration } from "@/lib/integrations";
 import { IconX, IconSun, IconMoon, IconDeviceLaptop, IconCalendar, IconBrandNotion, IconCheck, IconUnlink } from "@tabler/icons-react";
+import { LocationField } from "@/components/LocationField";
+import { NotionHelpModal } from "@/components/NotionHelpModal";
+import { setDisplayTimezone } from "@/lib/timezone";
+import { REMINDER_OPTIONS, requestNotificationPermission, type ReminderSettings } from "@/lib/notifications";
+import { IconBell, IconBellOff } from "@tabler/icons-react";
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "femenino", label: "Femenino" },
@@ -21,6 +26,8 @@ type Theme = "light" | "dark" | "system";
 interface Props {
   session: Session;
   onClose: () => void;
+  reminderSettings: ReminderSettings;
+  onReminderSettingsChange: (settings: ReminderSettings) => void;
 }
 
 function applyTheme(theme: Theme) {
@@ -39,11 +46,14 @@ function applyTheme(theme: Theme) {
   localStorage.setItem("theme", theme);
 }
 
-export function SettingsPage({ session, onClose }: Props) {
+export function SettingsPage({ session, onClose, reminderSettings, onReminderSettingsChange }: Props) {
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderNotice, setReminderNotice] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
   const [location, setLocation] = useState("");
+  const [timezone, setTimezone] = useState("");
   const [transport, setTransport] = useState<PreferredTransport | "">("");
   const [extraBuffer, setExtraBuffer] = useState(0);
   const [wakeTime, setWakeTime] = useState("07:00");
@@ -59,7 +69,7 @@ export function SettingsPage({ session, onClose }: Props) {
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("full_name, age, gender, location, preferred_transport, extra_buffer_minutes, wake_time, sleep_time, notion_database_id")
+      .select("full_name, age, gender, location, timezone, preferred_transport, extra_buffer_minutes, wake_time, sleep_time, notion_database_id")
       .eq("id", session.user.id)
       .single()
       .then(({ data }) => {
@@ -68,6 +78,7 @@ export function SettingsPage({ session, onClose }: Props) {
         setAge(data.age != null ? String(data.age) : "");
         setGender((data.gender as Gender) ?? null);
         setLocation(data.location ?? "");
+        setTimezone(data.timezone ?? "");
         setTransport((data.preferred_transport as PreferredTransport) ?? "");
         setExtraBuffer(data.extra_buffer_minutes ?? 0);
         setWakeTime(data.wake_time ?? "07:00");
@@ -104,6 +115,36 @@ export function SettingsPage({ session, onClose }: Props) {
     applyTheme(t);
   }
 
+  async function saveReminderPrefs(next: ReminderSettings) {
+    await supabase.from("profiles").update({
+      reminders_enabled: next.enabled,
+      reminder_minutes_before: next.minutesBefore,
+    }).eq("id", session.user.id);
+    onReminderSettingsChange(next);
+  }
+
+  async function toggleReminders() {
+    setReminderLoading(true);
+    try {
+      if (reminderSettings.enabled) {
+        await saveReminderPrefs({ ...reminderSettings, enabled: false });
+      } else {
+        const granted = await requestNotificationPermission();
+        if (!granted) {
+          setReminderNotice("Activa el permiso de notificaciones en Ajustes de Android para recibir recordatorios.");
+          return;
+        }
+        await saveReminderPrefs({ ...reminderSettings, enabled: true });
+      }
+    } finally {
+      setReminderLoading(false);
+    }
+  }
+
+  async function handleReminderMinutesChange(minutesBefore: number) {
+    await saveReminderPrefs({ ...reminderSettings, minutesBefore });
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -112,6 +153,7 @@ export function SettingsPage({ session, onClose }: Props) {
       age: age ? Number(age) : null,
       gender: gender ?? null,
       location: location || null,
+      timezone: timezone || "America/Mexico_City",
       preferred_transport: transport || null,
       extra_buffer_minutes: extraBuffer,
       wake_time: wakeTime,
@@ -119,6 +161,7 @@ export function SettingsPage({ session, onClose }: Props) {
       notion_database_id: notionDatabaseId || null,
       theme: theme === "system" ? null : theme,
     }).eq("id", session.user.id);
+    setDisplayTimezone(timezone || "America/Mexico_City");
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -220,13 +263,7 @@ export function SettingsPage({ session, onClose }: Props) {
           <label htmlFor="loc" className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
             Ubicación
           </label>
-          <input
-            id="loc"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Ciudad, país..."
-            className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-          />
+          <LocationField id="loc" value={location} onChange={setLocation} placeholder="Ciudad, país..." />
         </div>
 
         {/* Transporte */}
@@ -251,6 +288,20 @@ export function SettingsPage({ session, onClose }: Props) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Zona horaria */}
+        <div>
+          <label htmlFor="timezone" className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+            Zona horaria
+          </label>
+          <input
+            id="timezone"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            placeholder="America/Mexico_City"
+            className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+          />
         </div>
 
         {/* Horario */}
@@ -302,6 +353,57 @@ export function SettingsPage({ session, onClose }: Props) {
           </div>
         </div>
 
+        {/* Recordatorios */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+            Recordatorios
+          </label>
+          <div className="rounded-xl border border-border-soft bg-surface px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {reminderSettings.enabled ? (
+                  <IconBell size={16} stroke={1.5} className="shrink-0 text-muted" aria-hidden />
+                ) : (
+                  <IconBellOff size={16} stroke={1.5} className="shrink-0 text-muted" aria-hidden />
+                )}
+                <p className="text-sm">
+                  {reminderSettings.enabled ? "Avisos activos" : "Recibe un aviso antes de que empiece una tarea"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleReminders}
+                disabled={reminderLoading}
+                className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs disabled:opacity-40 ${
+                  reminderSettings.enabled ? "border-border-soft text-muted" : "border-foreground bg-foreground text-background"
+                }`}
+              >
+                {reminderLoading ? "..." : reminderSettings.enabled ? "Desactivar" : "Activar"}
+              </button>
+            </div>
+
+            {reminderSettings.enabled && (
+              <div>
+                <label className="text-xs text-muted mb-1.5 block" htmlFor="reminder_minutes">
+                  Avisar con cuánta anticipación
+                </label>
+                <select
+                  id="reminder_minutes"
+                  value={reminderSettings.minutesBefore}
+                  onChange={(e) => handleReminderMinutesChange(Number(e.target.value))}
+                  className="w-full rounded-md border border-border-soft bg-background px-3 py-2 text-sm"
+                >
+                  {REMINDER_OPTIONS.map((m) => (
+                    <option key={m} value={m}>{m} min antes</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {reminderNotice && <p className="text-xs text-muted">{reminderNotice}</p>}
+          </div>
+        </div>
+
         {/* Integraciones */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">
@@ -315,37 +417,58 @@ export function SettingsPage({ session, onClose }: Props) {
               const integration = integrations.find((i) => i.provider === provider);
               const connected = integration?.connected ?? false;
               const isConnecting = connectingProvider === provider;
+              const gmailConnected = provider === "google" && Boolean(integration?.scope?.includes("gmail"));
               return (
-                <div key={provider} className="flex items-center gap-3 rounded-xl border border-border-soft bg-surface px-4 py-3">
-                  <Icon size={18} stroke={1.5} className="shrink-0 text-muted" aria-hidden />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{label}</p>
-                    {connected && provider === "notion" && integration?.workspace_name && (
-                      <p className="text-xs text-muted truncate">{integration.workspace_name}</p>
-                    )}
-                    {connected && (
-                      <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                        <IconCheck size={11} stroke={2.5} aria-hidden /> Conectado
-                      </p>
+                <div key={provider} className="rounded-xl border border-border-soft bg-surface px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Icon size={18} stroke={1.5} className="shrink-0 text-muted" aria-hidden />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{label}</p>
+                      {connected && provider === "notion" && integration?.workspace_name && (
+                        <p className="text-xs text-muted truncate">{integration.workspace_name}</p>
+                      )}
+                      {connected && (
+                        <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                          <IconCheck size={11} stroke={2.5} aria-hidden /> Conectado
+                        </p>
+                      )}
+                    </div>
+                    {connected ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDisconnect(provider)}
+                        className="shrink-0 flex items-center gap-1 rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
+                      >
+                        <IconUnlink size={12} stroke={1.5} aria-hidden /> Desconectar
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleConnect(provider)}
+                        disabled={isConnecting}
+                        className="shrink-0 rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40"
+                      >
+                        {isConnecting ? "..." : "Conectar"}
+                      </button>
                     )}
                   </div>
-                  {connected ? (
-                    <button
-                      type="button"
-                      onClick={() => handleDisconnect(provider)}
-                      className="shrink-0 flex items-center gap-1 rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
-                    >
-                      <IconUnlink size={12} stroke={1.5} aria-hidden /> Desconectar
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleConnect(provider)}
-                      disabled={isConnecting}
-                      className="shrink-0 rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40"
-                    >
-                      {isConnecting ? "..." : "Conectar"}
-                    </button>
+
+                  {provider === "google" && connected && (
+                    <div className="mt-2.5 flex items-center justify-between pt-2.5 border-t border-border-soft">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${gmailConnected ? "bg-green-500" : "bg-amber-400"}`} />
+                        <p className="text-xs text-muted">{gmailConnected ? "Gmail conectado" : "Gmail no habilitado"}</p>
+                      </div>
+                      {!gmailConnected && (
+                        <button
+                          type="button"
+                          onClick={() => handleConnect("google")}
+                          className="text-xs text-amber-600 dark:text-amber-400 underline"
+                        >
+                          Reconectar para activar
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -374,16 +497,9 @@ export function SettingsPage({ session, onClose }: Props) {
             placeholder="32 caracteres del final de la URL de la base de datos"
             className="w-full rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
           />
-          {showNotionHelp && (
-            <p className="mt-2 text-xs text-muted leading-relaxed rounded-xl border border-border-soft bg-surface px-3 py-2.5">
-              Abre tu base de datos en Notion → <strong>···</strong> → <strong>Copiar enlace</strong>. El ID son los
-              32 caracteres alfanuméricos al final del nombre en la URL (antes del <code>?</code>). No olvides
-              conectar tu integración de Notion a esa base de datos: <strong>···</strong> →{" "}
-              <strong>Conexiones</strong> → selecciona tu integración.
-            </p>
-          )}
           <p className="mt-1 text-xs text-muted">Cada nueva tarea creará una página dentro de esta base de datos.</p>
         </div>
+        {showNotionHelp && <NotionHelpModal onClose={() => setShowNotionHelp(false)} />}
 
         {/* Cuenta */}
         <div className="rounded-xl border border-border-soft bg-surface px-4 py-3">

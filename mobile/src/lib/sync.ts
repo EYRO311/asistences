@@ -11,6 +11,33 @@ import type { Item } from "./types";
 
 const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
 
+export interface ExternalSyncResult {
+  importedFromGoogle: number;
+  importedFromNotion: number;
+  mergedDuplicates: number;
+  errors: string[];
+}
+
+/**
+ * Fase 6: complementa el sync SQLite <-> Supabase (que solo mueve lo que
+ * cualquiera de las dos apps ya conoce) con la importación real desde Google
+ * Calendar / Notion — mismo endpoint que usa web/components/SyncWidget.tsx,
+ * necesario para que un evento creado directo en Google Calendar (fuera de
+ * la app) le llegue a un usuario que solo usa mobile.
+ */
+export async function runExternalSync(): Promise<ExternalSyncResult | null> {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) return null;
+
+  const res = await fetch(`${WEB_URL}/api/sync`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("No se pudo sincronizar con Google Calendar/Notion");
+  return res.json();
+}
+
 export async function pullFromSupabase(userId: string): Promise<void> {
   const { data, error } = await supabase
     .from("items")
@@ -98,12 +125,16 @@ export async function pushToSupabase(): Promise<void> {
 
 export async function fullSync(userId: string): Promise<void> {
   await pushToSupabase();
+  // Best-effort: no debe tumbar el sync normal si falla (sin red a Google/Notion, etc.)
+  await runExternalSync().catch(() => {});
   await pullFromSupabase(userId);
 }
 
 // Fuerza el envío de TODOS los items locales a Supabase,
 // borra la cola pendiente y vuelve a jalar desde Supabase.
-export async function forceSyncAll(userId: string): Promise<void> {
+// Devuelve el resultado de la importación externa para que la UI lo muestre
+// (items importados, duplicados unidos, errores) — ver App.tsx handleManualSync.
+export async function forceSyncAll(userId: string): Promise<ExternalSyncResult | null> {
   const items = await getAllItems();
   if (items.length > 0) {
     const { error } = await supabase.from("items").upsert(
@@ -121,5 +152,9 @@ export async function forceSyncAll(userId: string): Promise<void> {
   await db.run("DELETE FROM sync_queue");
   await db.run("UPDATE items SET synced = 1");
 
+  const externalResult = await runExternalSync();
+
   await pullFromSupabase(userId);
+
+  return externalResult;
 }

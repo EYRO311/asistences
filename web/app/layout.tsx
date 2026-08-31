@@ -5,6 +5,7 @@ import { NavBar } from "@/components/NavBar";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { createClient } from "@/lib/supabase/server";
 import { ThemeAwareToaster } from "@/components/ThemeAwareToaster";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,18 +27,6 @@ export const metadata: Metadata = {
   description: "Asistente de agenda con Google Calendar y Notion",
 };
 
-function themeInitScript(serverTheme: string | null): string {
-  return `(function () {
-  try {
-    var server = ${serverTheme ? `"${serverTheme}"` : "null"};
-    var stored = localStorage.getItem("theme");
-    var theme = server || (stored === "dark" || stored === "light" ? stored : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-    if (theme === "dark") document.documentElement.classList.add("dark");
-    localStorage.setItem("theme", theme);
-  } catch (e) {}
-})();`;
-}
-
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -48,14 +37,16 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  let serverTheme: "light" | "dark" | null = null;
+  let serverTheme: string = "light";
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("theme")
       .eq("id", user.id)
-      .single<{ theme: "light" | "dark" | null }>();
-    serverTheme = profile?.theme ?? null;
+      .single<{ theme: string | null }>();
+    if (profile?.theme) {
+      serverTheme = profile.theme;
+    }
   }
 
   return (
@@ -64,15 +55,18 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
-        {/* Script de tema: debe correr antes del primer paint para evitar flash */}
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript(serverTheme) }} />
-      </head>
-      <body className="min-h-full flex flex-col bg-background text-foreground">
-        <NavBar />
-        <div className={`flex-1 ${user ? "pb-20 md:pb-0" : ""}`}>{children}</div>
-        {user && <MobileBottomNav />}
-        <ThemeAwareToaster />
+      <body className="min-h-full flex flex-col bg-background text-foreground transition-colors duration-300">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          themes={["light", "dark", "theme-ocean", "theme-forest"]}
+        >
+          <NavBar />
+          <div className={`flex-1 ${user ? "pb-20 md:pb-0" : ""}`}>{children}</div>
+          {user && <MobileBottomNav />}
+          <ThemeAwareToaster />
+        </ThemeProvider>
       </body>
     </html>
   );

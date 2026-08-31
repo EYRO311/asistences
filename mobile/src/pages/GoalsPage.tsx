@@ -124,6 +124,7 @@ export function GoalsPage({ session, onSettings, onNewGoal }: Props) {
           onClose={() => setEditingGoalId(null)}
           onSaved={() => { setEditingGoalId(null); loadGoals(); }}
           onDeleted={() => { setEditingGoalId(null); loadGoals(); }}
+          onGoToSettings={() => { setEditingGoalId(null); onSettings(); }}
         />
       )}
     </div>
