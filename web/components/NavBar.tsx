@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { SyncWidget } from "@/components/SyncWidget";
 import { NavMenuClient } from "@/components/NavMenuClient";
-import { ThemeSelector } from "@/components/ThemeSelector";
 
 export async function NavBar() {
   const supabase = await createClient();
@@ -26,9 +25,8 @@ export async function NavBar() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* SyncWidget, Theme + email/salir en desktop */}
+        {/* SyncWidget + email/salir en desktop */}
         <div className="flex shrink-0 items-center gap-3">
-          <ThemeSelector />
           <SyncWidget />
           <div className="hidden items-center gap-3 nav:flex">
             <span className="text-muted truncate max-w-50">{user.email}</span>
