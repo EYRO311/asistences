@@ -3,6 +3,7 @@ import { ItemList } from "@/components/ItemList";
 import { FreeSlots } from "@/components/FreeSlots";
 import { GoalList, type GoalRow } from "@/components/GoalList";
 import type { Item } from "@/lib/types";
+import { FadeIn } from "@/components/FadeIn";
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -70,23 +71,28 @@ export default async function WeekPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 lg:max-w-6xl px-4 py-8 space-y-8">
+      <FadeIn delay={0.1}>
       <section>
         <h1 className="font-handwriting text-3xl mb-3">Disponibilidad de la semana</h1>
         <FreeSlots />
       </section>
+      </FadeIn>
 
       {weekGoals.length > 0 && (
+        <FadeIn delay={0.2}>
         <section>
           <h2 className="font-handwriting text-3xl mb-3">Metas de la semana</h2>
           <GoalList goals={weekGoals} />
         </section>
+        </FadeIn>
       )}
 
+      <FadeIn delay={0.3}>
       <section className="space-y-3">
         <h2 className="font-handwriting text-3xl mb-3">Tareas de esta semana</h2>
 
         {pasadas.length > 0 && (
-          <details className="rounded-lg border border-border-soft">
+          <details className="rounded-2xl border border-border-soft bg-surface/50 backdrop-blur-md shadow-sm">
             <summary className="cursor-pointer select-none px-4 py-3 text-sm text-muted">
               Pasadas ({pasadas.length})
             </summary>
@@ -98,6 +104,7 @@ export default async function WeekPage() {
 
         <ItemList items={resto} />
       </section>
+      </FadeIn>
     </main>
   );
 }

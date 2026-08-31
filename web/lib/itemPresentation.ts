@@ -205,15 +205,14 @@ export const TYPE_NOTE_COLORS: Record<ItemType, string> = {
     "bg-purple-100 border-purple-300 text-purple-900 dark:bg-purple-500/10 dark:border-purple-500 dark:text-purple-300 dark:shadow-[0_0_10px_-2px_rgba(168,85,247,0.7)]",
 };
 
-// Día libre en "Disponibilidad de la semana": teal pastel (claro) / cian eléctrico con brillo (oscuro).
-export const FREE_DAY_CARD_COLORS =
-  "border-teal-300 bg-teal-50 dark:border-cyan-500 dark:bg-cyan-500/10 dark:shadow-[0_0_10px_-2px_rgba(34,211,238,0.7)]";
-export const FREE_DAY_TEXT_COLORS = "text-teal-700 dark:text-cyan-300";
-export const FREE_DAY_DOT_COLOR = "bg-teal-500 dark:bg-cyan-400";
+// Día libre en "Disponibilidad de la semana"
+export const FREE_DAY_CARD_COLORS = "border-free-border bg-free-bg shadow-[0_0_15px_-3px_var(--free-dot)]";
+export const FREE_DAY_TEXT_COLORS = "text-free-text";
+export const FREE_DAY_DOT_COLOR = "bg-free-dot";
 
-// Bloques ocupados dentro del día: rosa/rojo, en contraste con el libre (teal/cian).
-export const BUSY_TEXT_COLORS = "text-rose-700 dark:text-red-400";
-export const BUSY_DOT_COLOR = "bg-rose-500 dark:bg-red-500";
+// Bloques ocupados dentro del día
+export const BUSY_TEXT_COLORS = "text-busy-text";
+export const BUSY_DOT_COLOR = "bg-busy-dot";
 
 export const TYPE_DOT_COLORS: Record<ItemType, string> = {
   compromiso: "bg-pink-400 dark:bg-red-500",

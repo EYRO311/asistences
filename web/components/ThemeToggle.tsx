@@ -1,28 +1,22 @@
 "use client";
 
+import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
-type Theme = "light" | "dark";
-
-function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
-  localStorage.setItem("theme", theme);
-}
-
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+    setMounted(true);
   }, []);
 
-  if (!theme) {
-    return <div className="h-9 w-40" />;
+  if (!mounted) {
+    return <div className="h-9 w-64 rounded-full bg-surface animate-pulse" />;
   }
 
-  function select(next: Theme) {
+  function select(next: string) {
     setTheme(next);
-    applyTheme(next);
     fetch("/api/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -30,26 +24,27 @@ export function ThemeToggle() {
     }).catch(() => {});
   }
 
+  const THEMES = [
+    { id: "light", label: "Claro" },
+    { id: "dark", label: "Oscuro" },
+    { id: "theme-ocean", label: "Océano" },
+    { id: "theme-forest", label: "Bosque" },
+  ];
+
   return (
-    <div className="inline-flex rounded-full border border-border-soft bg-surface p-1 text-sm">
-      <button
-        type="button"
-        onClick={() => select("light")}
-        className={`rounded-full px-3 py-1.5 transition-colors ${
-          theme === "light" ? "bg-foreground text-background" : "text-muted"
-        }`}
-      >
-        Claro
-      </button>
-      <button
-        type="button"
-        onClick={() => select("dark")}
-        className={`rounded-full px-3 py-1.5 transition-colors ${
-          theme === "dark" ? "bg-foreground text-background" : "text-muted"
-        }`}
-      >
-        Oscuro
-      </button>
+    <div className="inline-flex flex-wrap gap-1 rounded-full border border-border-soft bg-surface p-1 text-sm">
+      {THEMES.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => select(t.id)}
+          className={`rounded-full px-3 py-1.5 transition-colors ${
+            theme === t.id ? "bg-foreground text-background" : "text-muted hover:text-foreground"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }

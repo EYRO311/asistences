@@ -163,9 +163,9 @@ export function FreeSlots() {
           return (
             <li
               key={day.date}
-              className={`rounded-md border px-2 py-2 text-xs ${
-                day.free ? FREE_DAY_CARD_COLORS : "border-border-soft"
-              } ${isToday ? "ring-2 ring-foreground" : ""}`}
+              className={`rounded-2xl border px-3 py-3 text-xs transition-all hover:scale-[1.02] hover:shadow-md backdrop-blur-sm ${
+                day.free ? FREE_DAY_CARD_COLORS : "border-border-soft bg-surface/50"
+              } ${isToday ? "ring-2 ring-foreground shadow-sm" : ""}`}
             >
               <p className="font-medium">
                 {isToday
